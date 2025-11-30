@@ -7,7 +7,19 @@
     <link rel="stylesheet" href="/css/AdminMovie.css"> 
 </head>
 <body>
+<div class="navigation-bar" style="padding: 20px 0; border-bottom: 1px solid #ddd; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div class="breadcrumb">
+        <a id="breadcrumbLink" href="#" style="text-decoration: none; color: #555;">
+            <i class="fas fa-home"></i> Admin Dashboard
+        </a>
+        <span style="margin: 0 10px;">/</span>
+        <span style="font-weight: bold;">Quản lý Phim</span>
+    </div>
 
+    <a id="btnBackDashboard" href="#" class="btn-back-dashboard" style="background-color: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">
+        <i class="fas fa-arrow-left"></i> Quay lại Dashboard
+    </a>
+</div>
 <div class="movie-manager-container">
     <h1>🎬 Quản Lý Danh Sách Phim</h1>
 
@@ -144,7 +156,7 @@
             <span class="close-button" id="closeActorModalBtn">&times;</span>
         </div>
         <div class="modal-body">
-            <input type="text" id="actorSearchInput" class="search-input" placeholder="🔍 Tìm kiếm diễn viên...">
+            <label for="actorSearchInput"></label><input type="text" id="actorSearchInput" class="search-input" placeholder="🔍 Tìm kiếm diễn viên...">
             <div id="actorSelectList" class="select-list">
                 <!-- Danh sách actors sẽ được render ở đây -->
             </div>
@@ -160,7 +172,7 @@
             <span class="close-button" id="closeGenreModalBtn">&times;</span>
         </div>
         <div class="modal-body">
-            <input type="text" id="genreSearchInput" class="search-input" placeholder="🔍 Tìm kiếm thể loại...">
+            <label for="genreSearchInput"></label><input type="text" id="genreSearchInput" class="search-input" placeholder="🔍 Tìm kiếm thể loại...">
             <div id="genreSelectList" class="select-list">
                 <!-- Danh sách genres sẽ được render ở đây -->
             </div>
@@ -183,7 +195,7 @@
                 <input type="text" id="episodeName" class="search-input" placeholder="Ví dụ: Tập 1, Episode 1" required>
             </div>
             <div class="form-group">
-                <label for="episodeVideo">Video File</label>
+                <label for="episodeVideoFileInput">Video File</label>
                 <div class="video-upload-wrapper">
                     <div class="video-preview-container">
                         <video id="videoPreview" class="video-preview" controls style="display: none;">
@@ -234,7 +246,7 @@ document.getElementById("movieForm").addEventListener("submit", function(e) {
     if (!poster || poster.trim() === "") {
         e.preventDefault();
         alert("❌ Bạn phải chọn poster cho phim!");
-        return;
+
     }
 });
 </script>

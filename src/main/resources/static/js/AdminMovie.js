@@ -1,5 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("userId");
 
+    // 2. Cập nhật link cho nút Quay lại và Breadcrumb
+    if (userId) {
+        const dashboardUrl = `/admin/dashboard?userId=${userId}`;
+
+        const breadcrumbLink = document.getElementById("breadcrumbLink");
+        if (breadcrumbLink) breadcrumbLink.href = dashboardUrl;
+
+        const btnBack = document.getElementById("btnBackDashboard");
+        if (btnBack) btnBack.href = dashboardUrl;
+    } else {
+        console.warn("Không tìm thấy userId trên URL!");
+    }
     const modal = document.getElementById('movieModal');
     const openAddModalBtn = document.getElementById('openAddModalBtn');
     const closeModalBtn = document.getElementById('closeModalBtn');
@@ -64,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchAndRenderMovies(page = 0, size = 10) {
         try {
-            const response = await fetch(`${API_BASE_URL}?page=${page}&size=${size}&sortBy=movieId&sortDirection=desc`, {
+            const response = await fetch(`${API_BASE_URL}?page=${page}&size=${size}&sortBy=movieId&sortDirection=desc&userId=${userId}`, {
                 method: 'GET',
             });
 
