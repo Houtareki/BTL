@@ -1,14 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
+// --- [BẮT ĐẦU ĐOẠN CODE CẦN THÊM] ---
+    // 1. Lấy userId từ URL (ví dụ: ...?userId=1)
     const params = new URLSearchParams(window.location.search);
-    const userId = params.get("userId");
+    const currentUserId = params.get("userId");
 
-    // 2. Cập nhật link cho nút Quay lại và Breadcrumb
-    if (userId) {
-        const dashboardUrl = `/admin/dashboard?userId=${userId}`;
+    // 2. Nếu có userId, cập nhật link cho nút "Quay lại" và "Breadcrumb"
+    if (currentUserId) {
+        const dashboardUrl = `/admin/dashboard?userId=${currentUserId}`;
 
+        // Cập nhật href cho thẻ a có id="breadcrumbLink" (nếu bạn đã thêm id này trong HTML)
         const breadcrumbLink = document.getElementById("breadcrumbLink");
         if (breadcrumbLink) breadcrumbLink.href = dashboardUrl;
 
+        // Cập nhật href cho thẻ a có id="btnBackDashboard" (nếu bạn đã thêm id này trong HTML)
         const btnBack = document.getElementById("btnBackDashboard");
         if (btnBack) btnBack.href = dashboardUrl;
     } else {
@@ -78,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchAndRenderMovies(page = 0, size = 10) {
         try {
-            const response = await fetch(`${API_BASE_URL}?page=${page}&size=${size}&sortBy=movieId&sortDirection=desc&userId=${userId}`, {
+            const response = await fetch(`${API_BASE_URL}?page=${page}&size=${size}&sortBy=movieId&sortDirection=asc&userId=${currentUserId}`, {
                 method: 'GET',
             });
 
@@ -105,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const row = `
                     <tr data-id="${movie.movieId}">
                         <td>${movie.movieId}</td>
-                        <td>${movie.title}</td>
+                        <td title="${movie.title}">${movie.title}</td>
                         <td>${movie.releaseYear || 'N/A'}</td>
                         <td>${movie.country || 'N/A'}</td>
                         <td class="action-buttons">

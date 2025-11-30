@@ -47,6 +47,7 @@ h1 {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
+    table-layout: fixed;
 }
 
 .movie-list-table th,
@@ -54,12 +55,57 @@ h1 {
     border: 1px solid #ddd;
     padding: 12px;
     text-align: left;
+    /* Đảm bảo nội dung không bị dính sát lề */
+    vertical-align: middle;
 }
 
 .movie-list-table th {
     background-color: #f0f0f0;
     font-weight: bold;
     color: #555;
+}
+
+/* --- ĐỊNH NGHĨA CHIỀU RỘNG CỘT --- */
+
+/* Cột 1: ID Phim (Nhỏ) */
+.movie-list-table th:nth-child(1),
+.movie-list-table td:nth-child(1) {
+    width: 80px;
+    text-align: center;
+}
+
+/* Cột 2: Tên Phim (Quan trọng - Xử lý cắt chữ) */
+.movie-list-table th:nth-child(2),
+.movie-list-table td:nth-child(2) {
+    width: auto; /* Chiếm toàn bộ không gian còn lại */
+    white-space: nowrap;       /* Không xuống dòng */
+    overflow: hidden;          /* Ẩn phần thừa */
+    text-overflow: ellipsis;   /* Thêm dấu "..." */
+    max-width: 0; /* Hack để kích hoạt text-overflow trên table-cell */
+}
+
+/* Cột 3: Năm (Cố định) */
+.movie-list-table th:nth-child(3),
+.movie-list-table td:nth-child(3) {
+    width: 100px;
+    text-align: center;
+}
+
+/* Cột 4: Quốc Gia (Cố định & Cắt chữ) */
+.movie-list-table th:nth-child(4),
+.movie-list-table td:nth-child(4) {
+    width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Cột 5: Hành Động (Đủ rộng cho 2 nút) */
+.movie-list-table th:nth-child(5),
+.movie-list-table td:nth-child(5) {
+    width: 190px;
+    text-align: center;
+    white-space: nowrap;
 }
 
 /* Nút hành động (Sửa, Xóa) trong bảng */

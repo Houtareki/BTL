@@ -162,7 +162,8 @@
             let chosenTab = btn.dataset.tab;
             // Nếu tab là movie thì chuyển tới trang quản lý movie riêng
             if(chosenTab === 'movies') {
-                window.location.href = `http://localhost:8080/api/admin/movies/get-page?userId=${userId}`;
+                // Truyền thêm userId đang có sẵn ở biến userId vào URL
+                window.location.href = `/api/admin/movies/get-page?userId=${userId}`;
             }
             else {
                 document.querySelectorAll('aside button[data-tab]').forEach(b => b.classList.remove('bg-gray-700'));
