@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Register</title>
+  <link rel="stylesheet" href="../css/register.css">
+  
+</head>
+
+<body>
+  <div class="overlay"></div>
+  <div class="register-box">
+    <div class="logo"><span>PTIT CINEMA</span></div>
+    <h2>Đăng ký</h2>
+
+    <form id="registerForm">
+      <div class="input-group">
+        <input type="text" id="username" placeholder="Tên đăng nhập" required>
+      </div>
+      <div class="input-group">
+        <input type="email" id="email" placeholder="Email" required>
+      </div>
+      <div class="input-group">
+        <input type="password" id="password" placeholder="Mật khẩu" required>
+      </div>
+      <div class="input-group">
+        <input type="password" id="confirmPassword" placeholder="Xác nhận mật khẩu" required>
+      </div>
+
+      <div id="message"></div>
+      <button type="submit" class="btn">Đăng ký</button>
+    </form>
+
+    <div class="signup">
+      Đã có tài khoản? <a href="login">Đăng nhập ngay</a>
+    </div>
+  </div>
+
+  <script src="../js/register.js"></script>
+
+</body>
+
+</html>

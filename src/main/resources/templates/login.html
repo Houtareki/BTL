@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <link rel="stylesheet" href="../css/login.css">
+</head>
+
+<body>
+  <div class="overlay"></div>
+  <div class="login-box">
+    <div class="logo"><span>PTIT CINEMA</span></div>
+    <h2>Đăng nhập</h2>
+
+    <!-- <div id="error"></div> -->
+
+    <form id="loginForm">
+      <div class="input-group">
+        <input type="email" id="email" placeholder="Email" required>
+      </div>
+      <div class="input-group">
+        <input type="password" id="password" placeholder="Mật khẩu" required>
+      </div>
+      <div id="error"></div>
+      <button type="submit" class="btn">Đăng nhập</button>
+
+      <div class="options">
+        <label><input type="checkbox" id="remember"> Ghi nhớ tôi</label>
+        <a href="forgot_password">Quên mật khẩu?</a>
+      </div>
+    </form>
+
+    <div class="signup">
+      Chưa có tài khoản? <a href="register">Đăng ký ngay</a>
+    </div>
+  </div>
+
+  <script src="../js/login.js"></script>
+</body>
+
+</html>

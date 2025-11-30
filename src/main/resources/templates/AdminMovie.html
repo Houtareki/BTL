@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Phim</title>
+    <link rel="stylesheet" href="/css/AdminMovie.css"> 
+</head>
+<body>
+
+<div class="movie-manager-container">
+    <h1>🎬 Quản Lý Danh Sách Phim</h1>
+
+    <button class="btn-open-modal" id="openAddModalBtn">Thêm Phim Mới</button>
+
+    <div class="pagination-container">
+        <div class="pagination-info" id="paginationInfo">Đang tải...</div>
+        <div class="pagination-buttons">
+            <button class="btn-pagination" id="btnPrevious" disabled>← Previous</button>
+            <span class="page-indicator" id="pageIndicator">Trang 1</span>
+            <button class="btn-pagination" id="btnNext" disabled>Next →</button>
+        </div>
+    </div>
+
+    <table class="movie-list-table" id="movieTable">
+        <thead>
+            <tr>
+                <th>ID Phim</th>
+                <th>Tên Phim</th>
+                <th>Năm</th>
+                <th>Quốc Gia</th>
+                <th>Hành Động</th>
+            </tr>
+        </thead>
+        <tbody id="movieTableBody">
+            <tr>
+                <td colspan="5" style="text-align:center;">Đang tải dữ liệu...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal thêm/sửa phim -->
+<div id="movieModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Thêm Phim Mới</h2>
+            <span class="close-button" id="closeModalBtn">&times;</span>
+        </div>
+
+        <form id="movieForm" class="movie-form">
+            <input type="hidden" id="movieId">
+
+            <div class="form-group">
+                <label for="title">Tên Phim</label>
+                <input type="text" id="title" required placeholder="Nhập tên phim">
+            </div>
+
+            <div class="form-group">
+                <label for="description">Mô Tả</label>
+                <textarea id="description" required placeholder="Nhập mô tả phim"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="releaseYear">Năm Phát Hành</label>
+                <input type="number" id="releaseYear" required min="1900" max="2100" placeholder="Ví dụ: 2024">
+            </div>
+
+            <div class="form-group">
+                <label for="country">Quốc Gia</label>
+                <input type="text" id="country" required placeholder="Nhập quốc gia">
+            </div>
+            
+            <div class="form-group">
+                <label for="posterUrl">Poster Phim</label>
+                <input type="hidden" id="posterUrl" required>
+                <div class="poster-upload-wrapper">
+                    <div class="poster-preview-box">
+                        <img id="posterPreview" class="poster-preview" src="" alt="Poster Preview" style="display: none;">
+                        <div id="posterPlaceholder" class="poster-placeholder">
+                            <span class="placeholder-icon">🖼️</span>
+                            <span class="placeholder-text">Chưa có ảnh</span>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-upload-poster" id="btnUploadPoster">
+                        <span class="upload-icon">📤</span>
+                        <span>Chọn Ảnh</span>
+                    </button>
+                    <input type="file" id="posterFileInput" accept="image/*" style="display: none;">
+                </div>
+            </div>
+
+            <!-- Phần hiển thị episodes -->
+            <div class="form-section" id="episodesSection" style="display: none;">
+                <div class="section-header">
+                    <h3>📺 Danh Sách Tập Phim</h3>
+                    <button type="button" class="btn-add-item" id="btnAddEpisode">
+                        <span>➕</span> Thêm Tập Phim
+                    </button>
+                </div>
+                <div id="episodesList" class="episodes-container">
+                    <!-- Episodes sẽ được render ở đây -->
+                </div>
+            </div>
+
+            <!-- Phần hiển thị actors -->
+            <div class="form-section" id="actorsSection" style="display: none;">
+                <div class="section-header">
+                    <h3>🎭 Diễn Viên</h3>
+                    <button type="button" class="btn-add-item" id="btnAddActor">
+                        <span>➕</span> Thêm Diễn Viên
+                    </button>
+                </div>
+                <div id="actorsList" class="tags-container">
+                    <!-- Actors sẽ được render ở đây -->
+                </div>
+            </div>
+
+            <!-- Phần hiển thị genres -->
+            <div class="form-section" id="genresSection" style="display: none;">
+                <div class="section-header">
+                    <h3>🎬 Thể Loại</h3>
+                    <button type="button" class="btn-add-item" id="btnAddGenre">
+                        <span>➕</span> Thêm Thể Loại
+                    </button>
+                </div>
+                <div id="genresList" class="tags-container">
+                    <!-- Genres sẽ được render ở đây -->
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn-save">Lưu Lại</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal chọn diễn viên -->
+<div id="actorSelectModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-select">
+        <div class="modal-header">
+            <h2>Chọn Diễn Viên</h2>
+            <span class="close-button" id="closeActorModalBtn">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="actorSearchInput" class="search-input" placeholder="🔍 Tìm kiếm diễn viên...">
+            <div id="actorSelectList" class="select-list">
+                <!-- Danh sách actors sẽ được render ở đây -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal chọn thể loại -->
+<div id="genreSelectModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-select">
+        <div class="modal-header">
+            <h2>Chọn Thể Loại</h2>
+            <span class="close-button" id="closeGenreModalBtn">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="genreSearchInput" class="search-input" placeholder="🔍 Tìm kiếm thể loại...">
+            <div id="genreSelectList" class="select-list">
+                <!-- Danh sách genres sẽ được render ở đây -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal thêm/sửa episode -->
+<div id="episodeModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-select">
+        <div class="modal-header">
+            <h2 id="episodeModalTitle">Thêm Tập Phim</h2>
+            <span class="close-button" id="closeEpisodeModalBtn">&times;</span>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="episodeEditIndex">
+            <input type="hidden" id="episodeVideoUrl" required>
+            <div class="form-group">
+                <label for="episodeName">Tên Tập</label>
+                <input type="text" id="episodeName" class="search-input" placeholder="Ví dụ: Tập 1, Episode 1" required>
+            </div>
+            <div class="form-group">
+                <label for="episodeVideo">Video File</label>
+                <div class="video-upload-wrapper">
+                    <div class="video-preview-container">
+                        <video id="videoPreview" class="video-preview" controls style="display: none;">
+                            <source src="" type="video/mp4">
+                            Trình duyệt không hỗ trợ video.
+                        </video>
+                        <div id="videoPlaceholder" class="video-placeholder">
+                            <span class="placeholder-icon">🎬</span>
+                            <span class="placeholder-text">Chưa có video</span>
+                        </div>
+                    </div>
+                    <div class="video-info-box" id="videoInfoBox">
+                        <span class="video-icon">📹</span>
+                        <span class="video-name" id="videoFileName">Chưa chọn file</span>
+                    </div>
+                    <button type="button" class="btn-upload-video" id="btnUploadVideo">
+                        <span class="upload-icon">📤</span>
+                        <span>Chọn Video</span>
+                    </button>
+                    <input type="file" id="episodeVideoFileInput" accept="video/*" style="display: none;">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn-save" id="btnSaveEpisode">Lưu</button>
+                <button type="button" class="btn-cancel" id="btnCancelEpisode">Hủy</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/js/AdminMovie.js"></script>
+<script>
+document.getElementById("movieForm").addEventListener("submit", function(e) {
+    const year = document.getElementById("releaseYear").value;
+    const poster = document.getElementById("posterUrl").value;
+
+    // Validate năm
+    if (isNaN(year) || year < 1900 || year > 2100) {
+        e.preventDefault();
+        alert("❌ Năm phát hành không hợp lệ!");
+        return;
+    }
+
+    // Validate poster bắt buộc
+    if (!poster || poster.trim() === "") {
+        e.preventDefault();
+        alert("❌ Bạn phải chọn poster cho phim!");
+        return;
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* nhỏ gọn cho modal overlay */
+        .modal {
+            display: none;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen flex">
+
+<!-- SIDEBAR -->
+<aside class="w-64 bg-gray-800 p-4">
+    <h1 class="text-2xl font-bold text-rose-500 text-center mb-4">Admin Management</h1>
+    <nav class="space-y-1">
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="dashboard">
+            <i class="fa-solid fa-chart-line mr-2"></i>Dashboard
+        </button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="movies">Movies</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="genres">Genres</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="actors">Actors</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="directors">Directors</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="episodes">Episodes</button>
+        <hr class="my-3 border-gray-700" />
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="users">Users</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="hot-movies">Hot Films</button>
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700" data-tab="comments">Comments</button>
+        <hr class="my-3 border-gray-700" />
+        <button class="w-full text-left px-3 py-2 rounded hover:bg-red-700 text-red-400"
+                onclick="window.location.href='/user/login'">
+            <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+    </nav>
+</aside>
+
+<!-- MAIN -->
+<main class="flex-1 p-6 overflow-auto">
+    <div id="appHeader" class="flex items-center justify-between mb-4">
+        <h2 id="pageTitle" class="text-2xl font-semibold">Movies</h2>
+        <div id="headerActions" class="space-x-2"></div>
+    </div>
+
+    <!-- CONTENT AREA: bảng + phân trang -->
+    <div id="contentArea" class="bg-gray-800 rounded p-4">
+        <!-- dynamic content injected here -->
+    </div>
+</main>
+
+<!-- MODAL: dùng chung cho Add/Edit và "Add to Movie" flows -->
+<div id="modal" class="modal fixed inset-0 items-start justify-center bg-black bg-opacity-60 p-6">
+    <div class="bg-gray-900 rounded w-full max-w-2xl mx-auto mt-12 shadow-lg overflow-auto max-h-[80vh]">
+        <div class="flex items-center justify-between p-4 border-b border-gray-700">
+            <h3 id="modalTitle" class="text-lg font-semibold"></h3>
+            <button id="modalClose" class="text-gray-300 hover:text-white text-2xl">&times;</button>
+        </div>
+        <div id="modalBody" class="p-4"></div>
+    </div>
+</div>
+
+<!-- Toast area (simple) -->
+<div id="toast" class="fixed right-6 bottom-6"></div>
+
+<!-- Link JS -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script type="text/javascript" charset="utf-8">
+    /* admin.js
+   Full frontend admin logic:
+   - load tabs (movies, genres, actors, directors, episodes, users, comments)
+   - pagination for every tab
+   - CRUD for main entities
+   - "Add to Movie" flows for genre/actor/director/episode (choose movie, choose items, save)
+   - Comments inline and simple toast notifications
+*/
+
+    // ---------- Config ----------
+    const API_BASE = "http://localhost:8080/admin"; // => chỉnh theo backend
+    const PAGE_SIZE = 10; // kích thước mặc định
+    const contentArea = document.getElementById('contentArea');
+    const pageTitle = document.getElementById('pageTitle');
+    const headerActions = document.getElementById('headerActions');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const toast = document.getElementById('toast');
+    const params = new URLSearchParams(window.location.search);
+    const userId = parseInt(params.get("userId"));
+
+    // Hiển thị thông báo thành công với hiệu ứng và dấu tích xanh
+    function showSuccess(message) {
+        Swal.fire({
+            icon: "success",
+            title: "Thành công!",
+            text: message,
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true,
+        });
+    }
+
+    // Hiển thị thông báo lỗi
+    function showError(message) {
+        Swal.fire({
+            icon: "error",
+            title: "Thất bại!",
+            text: message,
+        });
+    }
+
+    let currentTab = 'movies';
+    let tabState = { // theo tab lưu page hiện tại
+        movies: { page: 0, keyword: '' }, genres: { page: 0, keyword: '' }, actors: { page: 0, keyword: '' }, directors: { page: 0, keyword: '' }, episodes: { page: 0, keyword: '' }, users: { page: 0, keyword: '' }, comments: { page: 0, keyword: '' }
+    };
+
+    // ---------- Helpers ----------
+    function showToast(text, type = 'success') {
+        const el = document.createElement('div');
+        el.className = `mb-2 px-4 py-2 rounded ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+        el.innerText = text;
+        toast.appendChild(el);
+        setTimeout(() => el.remove(), 3000);
+    }
+
+    async function fetchApi(path, method = 'GET', body = null) {
+        const options = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) options.body = JSON.stringify(body);
+        const res = await fetch(API_BASE + path, options);
+        if (!res.ok) {
+            const txt = await res.text().catch(() => res.statusText);
+            showError("Không thể kết nối tới máy chủ");
+            throw new Error(txt || 'Network error');
+        }
+        const json = await res.json();
+        return json;
+    }
+
+    function openModal(title, htmlContent) {
+        modalTitle.innerText = title;
+        modalBody.innerHTML = htmlContent;
+        modal.classList.add('active');
+        window.scrollTo(0, 0);
+    }
+    function closeModal() { modal.classList.remove('active'); modalBody.innerHTML = ''; }
+
+    // close modal button
+    document.getElementById('modalClose').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    // sidebar tab clicks
+    document.querySelectorAll('aside button[data-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            let chosenTab = btn.dataset.tab;
+            // Nếu tab là movie thì chuyển tới trang quản lý movie riêng
+            if(chosenTab === 'movies') {
+                window.location.href = "http://localhost:8080/api/admin/movies/get-page";
+            }
+            else {
+                document.querySelectorAll('aside button[data-tab]').forEach(b => b.classList.remove('bg-gray-700'));
+                btn.classList.add('bg-gray-700');
+                loadPage(chosenTab);
+            }
+            
+        });
+    });
+
+    // ---------- Pagination renderer ----------
+    function renderPagination(pagingRootId, totalPages, currentPage, onPageClickFnName, keyword, payload = {}) {
+        if (totalPages <= 1) return '';
+
+        // Chuyển payload thành string và escape dấu nháy
+        const payloadStr = JSON.stringify(payload).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        const keywordEscaped = keyword.replace(/'/g, "\\'");
+
+        let html = `<div class="mt-4 flex justify-center items-center gap-2">`;
+
+        // First
+        html += `<button class="px-3 py-1 rounded bg-gray-700" ${currentPage === 0 ? 'disabled' : ''}
+                onclick="${onPageClickFnName}(0, '${keywordEscaped}', ${payloadStr})">« First</button>`;
+
+        // Prev
+        html += `<button class="px-3 py-1 rounded bg-gray-700" ${currentPage === 0 ? 'disabled' : ''}
+                onclick="${onPageClickFnName}(${Math.max(0, currentPage - 1)}, '${keywordEscaped}', ${payloadStr})">Prev</button>`;
+
+        // Pages window
+        const start = Math.max(0, currentPage - 3);
+        const end = Math.min(totalPages - 1, currentPage + 3);
+        for (let i = start; i <= end; i++) {
+            html += `<button class="px-3 py-1 rounded ${i === currentPage ? 'bg-rose-500' : 'bg-gray-700'}"
+                    onclick="${onPageClickFnName}(${i}, '${keywordEscaped}', ${payloadStr})">
+                    ${i + 1}
+                 </button>`;
+        }
+
+        // Next
+        html += `<button class="px-3 py-1 rounded bg-gray-700" ${currentPage === totalPages - 1 ? 'disabled' : ''}
+                onclick="${onPageClickFnName}(${Math.min(totalPages - 1, currentPage + 1)}, '${keywordEscaped}', ${payloadStr})">Next</button>`;
+
+        // Last
+        html += `<button class="px-3 py-1 rounded bg-gray-700"
+                onclick="${onPageClickFnName}(${totalPages - 1}, '${keywordEscaped}', ${payloadStr})">Last »</button>`;
+
+        html += `</div>`;
+
+        return html;
+    }
+
+
+    function performSearch(tab, keyword, payload = '') {
+        if (tab === 'dashboard') return;
+
+        let loader;
+        if (tab === 'movies') {
+            loader = loadMovies(0, keyword, payload);
+        }
+        else {
+            loader = {
+                movies: loadMovies,
+                genres: loadGenres,
+                actors: loadActors,
+                directors: loadDirectors,
+                episodes: loadEpisodes,
+                users: loadUsers,
+                comments: loadComments
+            }[tab](0, keyword);
+        }
+
+        loader && loader();
+    }
+
+
+
+    // ---------- MAIN: load page dispatcher ----------
+    async function loadPage(tab) {
+        // Đặt tab hiện tại & tiêu đề
+        currentTab = tab;
+        pageTitle.innerText = {
+            dashboard: 'Dashboard',
+            movies: 'Movies',
+            genres: 'Genres',
+            actors: 'Actors',
+            directors: 'Directors',
+            episodes: 'Episodes',
+            users: 'Users',
+            comments: 'Comments'
+        }[tab] || tab;
+
+        // Dọn sạch khu vực header
+        headerActions.innerHTML = '';
+
+        // Container bố cục chính
+        headerActions.className = 'flex flex-col justify-between items-center w-full px-4';
+
+        // Container con để chứa thanh search (ở giữa)
+        const topHeaderActions = document.createElement('div')
+        topHeaderActions.className = 'flex flex-row items-center justify-between flex-1 w-full';
+        const centerContainer = document.createElement('div');
+        centerContainer.className = 'flex justify-center flex-1';
+        headerActions.appendChild(topHeaderActions);
+
+
+        // Ô search
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Search...';
+        searchInput.className = `
+                px-4 py-2 rounded-lg text-white bg-black
+                placeholder-gray-400 focus:outline-none
+                focus:ring-2 focus:ring-blue-400 w-80
+            `;
+
+        let searchTimer; // biến toàn cục hoặc để trong file script chính
+
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimer); // xóa timer cũ nếu user đang gõ tiếp
+            const keyword = e.target.value.trim();
+
+            // chỉ gọi API nếu người dùng dừng gõ 500ms
+            searchTimer = setTimeout(() => {
+                performSearch(currentTab, keyword);
+            }, 500);
+        });
+
+
+        centerContainer.appendChild(searchInput);
+
+        // Nút “+ Add” ở bên phải
+        const addBtn = document.createElement('button');
+        addBtn.className = `
+                px-4 py-2 bg-green-600 hover:bg-green-700
+                text-white rounded-lg font-semibold ml-4
+            `;
+        addBtn.innerText = '+ Add';
+        addBtn.addEventListener('click', () => {
+            const fn = {
+                movies: showMovieCreate,
+                genres: showGenreCreate,
+                actors: showActorCreate,
+                directors: showDirectorCreate,
+                episodes: showEpisodeCreate,
+                users: showUserCreate,
+                comments: () => showToast('Không được nhét chữ!', 'error')
+            }[tab];
+            fn && fn();
+        });
+
+        // Gắn tất cả vào headerActions
+        topHeaderActions.appendChild(pageTitle);
+        topHeaderActions.appendChild(centerContainer);
+        topHeaderActions.appendChild(addBtn);
+
+        // 8Load dữ liệu ban đầu
+        const loader = {
+            dashboard: loadDashboard,
+            movies: loadMovies,
+            genres: loadGenres,
+            actors: loadActors,
+            directors: loadDirectors,
+            episodes: loadEpisodes,
+            users: loadUsers,
+            comments: loadComments
+        }[tab];
+        loader && loader(tabState[tab].page || 0);
+    }
+
+
+
+
+    // ---------- MOVIES: load / create / edit / delete ----------
+    async function loadMovies(page = 0, keyword = '', payload = '') {
+
+        tabState.movies.page = page;
+        tabState.movies.keyword = keyword
+        // call paged API
+        try {
+            let api = `/movies?userId=${userId}&pageNo=${page}&`;
+            let resp;
+            if (keyword && keyword.trim().length > 0) {
+                // Khi có keyword → gọi API search
+                const payload = {
+                    title: keyword,      // tên phim
+                };
+
+                resp = await fetchApi(`/search${api}keyword=${keyword}`, 'POST', payload);
+            } else {
+                // Không có keyword → lấy danh sách bình thường
+                resp = await fetchApi(api, 'GET');
+            }
+            if (resp.status === 'Success') {
+                const pageObj = resp.data.data;
+                const list = pageObj.content || [];
+
+
+                // build table
+                let html = `<div class="flex justify-between items-center mb-3">
+                                  <div class="text-sm text-gray-300">Total: ${pageObj.totalElements ?? list.length}</div>
+                                </div>`;
+                html += `<table class="min-w-full">
+                            <thead class="bg-gray-800">
+                              <tr>
+                                <th class="p-2 text-left">ID</th>
+                                <th class="p-2 text-left">Title</th>
+                                <th class="p-2 text-left">Year</th>
+                                <th class="p-2 text-left">Status</th>
+                                <th class="p-2 text-left">Country</th>
+                                <th class="p-2 text-left">Languege</th>
+                                <th class="p-2 text-left">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>`;
+                list.forEach(m => {
+                    html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${m.movieId}</td>
+                                <td class="p-2">
+                                    <div class="truncate max-w-[220px]">
+                                        ${escapeHtml(m.title)}
+                                    </div>
+                                </td>
+
+                                <td class="p-2">${m.releaseYear ?? ''}</td>
+                                <td class="p-2">${m.movieStatus ?? ''}</td>
+                                <td class="p-2">${m.country ?? ''}</td>
+                                <td class="p-2">${m.language ?? ''}</td>
+                                <td class="p-2">
+                                  <div class="flex space-x-2">
+                                    <button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showMovieEdit(${m.movieId})">Edit</button>
+                                    <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteMovie(${m.movieId})">Delete</button>
+                                    <button class="px-2 py-1 bg-blue-600 rounded hover:bg-blue-700" onclick="openMovieDetailModal(${m.movieId})">Modify Infor</button>
+                                  </div>
+                                </td>
+                                </tr>`;
+                });
+                html += `</tbody></table>`;
+
+                html += renderPagination('movies', pageObj.totalPages, pageObj.number, 'loadMovies', keyword,
+                    (
+                        {
+                            title: keyword,      // tên phim
+                        }
+                    ));
+                contentArea.innerHTML = html;
+            }
+            else {
+                contentArea.innerHTML = `<div class="text-red-400">Lỗi khi tải movies: ${resp.message}</div>`;
+            }
+
+
+        } catch (err) {
+            contentArea.innerHTML = `<div class="text-red-400">Lỗi khi tải movies: ${err.message}</div>`;
+        }
+    }
+
+    // helper show create / edit
+    function showMovieCreate() {
+        openModal('Add Movie', movieFormHtml({}));
+    }
+    async function showMovieEdit(id) {
+        try {
+            const res = await fetchApi(`/get/movie?userId=${userId}&movieId=${id}`);
+            const m = res.data.data;
+            openModal('Edit Movie', movieFormHtml(m));
+        } catch (err) {
+            showError("Không lấy được dữ liệu.");
+            showToast('Không lấy được movie', 'error');
+        }
+    }
+
+    function movieFormHtml(m) {
+        // returns HTML form (no <form> tag) with save handler attached via inline onclick
+        return `
+            <div class="space-y-2">
+              <label class="block text-sm">Title</label>
+              <input id="f_title" value="${escapeAttr(m.title || '')}" class="w-full p-2 bg-gray-800 rounded" />
+              <label class="block text-sm">Description</label>
+              <textarea id="f_description" class="w-full p-2 bg-gray-800 rounded" rows="4">${escapeHtml(m.description || '')}</textarea>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-sm">Release Year</label>
+                  <input id="f_releaseYear" value="${escapeAttr(m.releaseYear || '')}" class="w-full p-2 bg-gray-800 rounded" />
+                </div>
+                <div>
+                  <label class="block text-sm">Views</label>
+                  <input id="f_views" type="number" value="${m.views ?? 0}" class="w-full p-2 bg-gray-800 rounded" />
+                </div>
+              </div>
+              <label class="block text-sm">Poster URL</label>
+              <input id="f_posterUrl" value="${escapeAttr(m.posterUrl || '')}" class="w-full p-2 bg-gray-800 rounded" />
+              <label class="block text-sm">Thumb URL</label>
+              <input id="f_thumbUrl" value="${escapeAttr(m.thumbUrl || '')}" class="w-full p-2 bg-gray-800 rounded" />
+              <label class="block text-sm">Trailer URL</label>
+              <input id="f_trailerUrl" value="${escapeAttr(m.trailerUrl || '')}" class="w-full p-2 bg-gray-800 rounded" />
+              <div class="grid grid-cols-2 gap-2">
+                <div><label class="block text-sm">Country</label><input id="f_country" value="${escapeAttr(m.country || '')}" class="w-full p-2 bg-gray-800 rounded" /></div>
+                <div><label class="block text-sm">Language</label><input id="f_language" value="${escapeAttr(m.language || '')}" class="w-full p-2 bg-gray-800 rounded" /></div>
+              </div>
+              <label class="block text-sm">Status</label>
+              <select id="f_status" class="w-full p-2 bg-gray-800 rounded">
+                <option value="coming" ${m.movieStatus === 'coming' ? 'selected' : ''}>coming</option>
+                <option value="showing" ${m.movieStatus === 'showing' ? 'selected' : ''}>showing</option>
+                <option value="finished" ${m.movieStatus === 'finished' ? 'selected' : ''}>finished</option>
+              </select>
+
+              <div class="flex justify-end gap-2 mt-3">
+                <button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+                <button class="px-3 py-1 bg-rose-600 rounded" onclick="saveMovie(${m.movieId ? m.movieId : 'null'})">Save</button>
+              </div>
+            </div>
+          `;
+    }
+
+    async function saveMovie(id) {
+        const payload = {
+            title: document.getElementById('f_title').value.trim(),
+            description: document.getElementById('f_description').value.trim(),
+            releaseYear: document.getElementById('f_releaseYear').value.trim(),
+            posterUrl: document.getElementById('f_posterUrl').value.trim(),
+            thumbUrl: document.getElementById('f_thumbUrl').value.trim(),
+            trailerUrl: document.getElementById('f_trailerUrl').value.trim(),
+            country: document.getElementById('f_country').value.trim(),
+            language: document.getElementById('f_language').value.trim(),
+            movieStatus: document.getElementById('f_status').value,
+            views: Number(document.getElementById('f_views').value || 0)
+        };
+        try {
+            if (id) await fetchApi(`/update/movie?userId=${userId}&movieId=${id}`, 'PUT', payload);
+            else await fetchApi(`/add/movie?userId=${userId}`, 'POST', payload);
+            showSuccess('Lưu movie thành công');
+            showToast('Lưu movie thành công');
+            closeModal();
+            loadMovies(tabState.movies.page, tabState.movies.keyword);
+        } catch (err) {
+            showError('Lỗi khi lưu movie');
+            showToast('Lỗi khi lưu movie', 'error');
+        }
+    }
+
+    async function deleteMovie(id) {
+        if (!confirm('Bạn có chắc muốn xoá phim này?')) return;
+        try {
+            await fetchApi(`/delete/movie?userId=${userId}&movieId=${id}`, 'DELETE');
+            showSuccess('Đã xoá movie');
+            showToast('Đã xoá movie');
+            loadMovies(tabState.movies.page, tabState.movies.keyword);
+        } catch (err) {
+            showError('Xoá thất bại')
+            showToast('Xoá thất bại', 'error');
+        }
+    }
+
+    // ---------- GENRES ----------
+    async function loadGenres(page = 0, keyword = '') {
+        tabState.genres.page = page;
+        tabState.genres.keyword = keyword;
+        try {
+            let api = `/genres?userId=${userId}&pageNo=${page}&`;
+            if (keyword && keyword.length > 0) {
+                api = "/search" + api + `keyword=${keyword}`;
+            }
+            const resp = await fetchApi(api);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+            html += `<table class="w-full text-left">
+                        <thead class="bg-gray-800">
+                            <tr>
+                                <th class="p-2 w-24">ID</th>
+                                <th class="p-2">Name</th>
+                                <th class="p-2 w-40">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            list.forEach(g => {
+                html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${g.genreId}</td>
+                                <td class="p-2">${escapeHtml(g.name)}</td>
+                                <td class="p-2">
+                                  <button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showGenreEdit(${g.genreId})">Edit</button>
+                                  <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteGenre(${g.genreId})">Delete</button>
+                                </td>
+                              </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('genres', pageObj.totalPages, pageObj.number, 'loadGenres', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) {
+            contentArea.innerHTML = `<div class="text-red-400">Lỗi genres: ${err.message}</div>`;
+        }
+    }
+
+    function showGenreCreate() {
+        openModal('Add Genre', `
+            <div>
+              <label class="block text-sm mb-1">Name</label>
+              <input id="g_name" class="w-full p-2 bg-gray-800 rounded" />
+              <div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+              <button class="px-3 py-1 bg-rose-600 rounded" onclick="saveGenre()">Save</button></div>
+            </div>
+          `);
+    }
+
+    async function showGenreEdit(id) {
+        try {
+            const r = await fetchApi(`/genre?userId=${userId}&genreId=${id}`);
+            openModal('Edit Genre', `
+                  <label class="block text-sm mb-1">Name</label>
+                  <input id="g_name" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.name)}" />
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+                    <button class="px-3 py-1 bg-rose-600 rounded" onclick="updateGenre(${id})">Save</button>
+                  </div>
+                `);
+        } catch (err) { showToast('Không lấy được genre', 'error'); }
+    }
+
+    async function saveGenre() {
+        const name = document.getElementById('g_name').value.trim();
+        if (!name) return showToast('Name required', 'error');
+        try {
+            let json = await fetchApi(`/add/genre?userId=${userId}`, 'POST', { name });
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã thêm genre');
+            }
+            closeModal(); loadGenres(tabState.genres.page, tabState.genres.keyword);
+        } catch (err) {
+            showError('Lỗi kết nối!');
+            showToast('Thêm thất bại', 'error');
+        }
+    }
+    async function updateGenre(id) {
+        const name = document.getElementById('g_name').value.trim();
+        try {
+            let json = await fetchApi(`/update/genre?userId=${userId}&genreId=${id}`, 'PUT', { name });
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã sửa thể loại');
+            }
+            closeModal(); loadGenres(tabState.genres.page, tabState.genres.keyword);
+        } catch (err) {
+            showError('Lỗi kết nối!');
+            showToast('Xoá thất bại', 'error');
+        }
+    }
+    async function deleteGenre(id) {
+        if (!confirm('Xoá thể loại?')) return;
+        try {
+            let json = await fetchApi(`/delete/genre?userId=${userId}&genreId=${id}`, 'DELETE');
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã xoá thể loại');
+            }
+            closeModal(); loadGenres(tabState.genres.page, tabState.genres.keyword);
+        } catch (err) {
+            showError('Lỗi kết nối!');
+            showToast('Xoá thất bại', 'error');
+        }
+    }
+
+
+
+    // ---------- ACTORS ----------
+    async function loadActors(page = 0, keyword = '') {
+        tabState.actors.page = page;
+        tabState.actors.keyword = keyword;
+        try {
+            let api = `/actors?userId=${userId}&pageNo=${page}&`;
+            if (keyword && keyword.length > 0) {
+                api = "/search" + api + `keyword=${keyword}`;
+            }
+            const resp = await fetchApi(api);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+            html += `<table class="w-full text-left">
+                        <thead class="bg-gray-800">
+                            <tr>
+                                <th class="p-2 w-24">ID</th>
+                                <th class="p-2">Name</th>
+                                <th class="p-2 w-40">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            list.forEach(a => {
+                html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${a.actorId}</td>
+                                <td class="p-2">${escapeHtml(a.name)}</td>
+                                <td class="p-2">
+                                  <button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showActorEdit(${a.actorId})">Edit</button>
+                                  <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteActor(${a.actorId})">Delete</button>
+                                </td>
+                              </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('actors', pageObj.totalPages, pageObj.number, 'loadActors', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) { contentArea.innerHTML = `<div class="text-red-400">Lỗi actors: ${err.message}</div>`; }
+    }
+
+    function showActorCreate() {
+        openModal('Add Actor', `
+            <label class="block text-sm mb-1">Name</label>
+            <input id="a_name" class="w-full p-2 bg-gray-800 rounded"/>
+            <div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+            <button class="px-3 py-1 bg-rose-600 rounded" onclick="saveActor()">Save</button></div>
+          `);
+    }
+
+    async function showActorEdit(id) {
+        try {
+            const r = await fetchApi(`/actor?userId=${userId}&actorId=${id}`);
+            openModal('Edit Actor', `
+                  <label class="block text-sm mb-1">Name</label>
+                  <input id="a_name" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.name)}"/>
+                  <div class="mt-3 flex justify-end gap-2">
+                    <button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+                    <button class="px-3 py-1 bg-rose-600 rounded" onclick="updateActor(${id})">Save</button>
+                  </div>
+                `);
+        } catch (e) { showToast('Get actor fail', 'error'); }
+    }
+    async function saveActor() {
+        const name = document.getElementById('a_name').value.trim()
+        if (!name) return showToast('Name required', 'error')
+        try {
+            let json = await fetchApi(`/add/actor?userId=${userId}`, 'POST', { name })
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast("Thất bại!", 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã thêm');
+            }
+            closeModal()
+            loadActors(tabState.actors.page, tabState.actors.keyword);
+        } catch (error) {
+            showError("Lỗi kết lối");
+            showToast("Thất bại!", 'error');
+        }
+    }
+    async function updateActor(id) {
+        const name = document.getElementById('a_name').value.trim();
+        try {
+            let json = await fetchApi(`/update/actor?userId=${userId}&actorId=${id}`, 'PUT', { name });
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast("Thất bại!", 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã cập nhập diễn viên');
+            }
+            closeModal()
+            loadActors(tabState.actors.page, tabState.actors.keyword);
+        } catch (error) {
+            showError("Lỗi kết lối");
+            showToast("Thất bại!", 'error');
+        }
+    }
+    async function deleteActor(id) {
+        if (!confirm('Xoá actor?')) return;
+        try {
+            let json = await fetchApi(`/delete/actor?userId=${userId}&actorId=${id}`, 'DELETE');
+            if (json.staus === 'Error') {
+                showError(json.message);
+                showToast("Thất bại!", 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã xoá diễn viên');
+            }
+            loadActors(tabState.actors.page, tabState.actors.keyword);
+        } catch (error) {
+            showError("Lỗi kết lối");
+            showToast("Thất bại!", 'error');
+        }
+    }
+
+    // ---------- DIRECTORS ----------
+    async function loadDirectors(page = 0, keyword = '') {
+        tabState.directors.page = page;
+        tabState.directors.keyword = keyword;
+        try {
+            let api = `/directors?userId=${userId}&pageNo=${page}&`;
+            if (keyword && keyword.length > 0) {
+                api = "/search" + api + `keyword=${keyword}`;
+            }
+            const resp = await fetchApi(api);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+            html += `<table class="w-full text-left">
+                        <thead class="bg-gray-800">
+                            <tr>
+                                <th class="p-2 w-24">ID</th>
+                                <th class="p-2">Name</th>
+                                <th class="p-2 w-40">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+            list.forEach(d => {
+                html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${d.directorId}</td>
+                                <td class="p-2">${escapeHtml(d.name)}</td>
+                                <td class="p-2">
+                                  <button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showDirectorEdit(${d.directorId})">Edit</button>
+                                  <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteDirector(${d.directorId})">Delete</button>
+                                </td>
+                              </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('directors', pageObj.totalPages, pageObj.number, 'loadDirectors', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) { contentArea.innerHTML = `<div class="text-red-400">Lỗi directors: ${err.message}</div>`; }
+    }
+
+    function showDirectorCreate() { openModal('Add Director', `<label class="block text-sm mb-1">Name</label><input id="d_name" class="w-full p-2 bg-gray-800 rounded"/><div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button><button class="px-3 py-1 bg-rose-600 rounded" onclick="saveDirector()">Save</button></div>`); }
+
+    async function showDirectorEdit(id) {
+        try {
+            const r = await fetchApi(`/director?userId=${userId}&directorId=${id}`);
+            openModal('Edit Director', `<label class="block text-sm mb-1">Name</label><input id="d_name" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.name)}"/><div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button><button class="px-3 py-1 bg-rose-600 rounded" onclick="updateDirector(${id})">Save</button></div>`);
+
+        } catch (e) {
+            showToast('Get director fail', 'error');
+
+        }
+    }
+
+    async function saveDirector() {
+        const name = document.getElementById('d_name').value.trim();
+        if (!name) return showToast('Name required', 'error');
+        try {
+            let json = await fetchApi(`/add/director?userId=${userId}`, 'POST', { name });
+            if (json.status === "Error") {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast(json.message);
+                closeModal();
+                loadDirectors(tabState.directors.page, tabState.directors.keyword);
+            }
+        } catch (error) {
+
+            showError("Lỗi kết nối");
+            showToast('Error', 'error');
+        }
+    }
+
+    async function updateDirector(id) {
+        const name = document.getElementById('d_name').value.trim();
+        try {
+            let json = await fetchApi(`/update/director?userId=${userId}&directorId=${id}`, 'PUT', { name });
+            if (json.status === "Error") {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast(json.message);
+                closeModal();
+                loadDirectors(tabState.directors.page, tabState.directors.keyword);
+            }
+        } catch (error) {
+
+            showError("Lỗi kết nối");
+            showToast('Error', 'error');
+        }
+    }
+    async function deleteDirector(id) {
+        if (!confirm('Xoá director?')) return;
+        try {
+            let json = await fetchApi(`/delete/director?userId=${userId}&directorId=${id}`, 'DELETE');
+            if (json.status === "Error") {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast(json.message);
+                loadDirectors(tabState.directors.page, tabState.directors.keyword);
+            }
+        } catch (error) {
+
+            showError("Lỗi kết nối");
+            showToast('Error', 'error');
+        }
+
+    }
+    function showAttachDirector() { openAttachEntityToMovie('director'); }
+    function showAttachDirectorById(directorId) { openAttachEntityToMovie('director', directorId); }
+
+    // ---------- EPISODES ----------
+    async function loadEpisodes(page = 0, keyword = '') {
+        tabState.episodes.page = page;
+        tabState.episodes.keyword = keyword;
+        try {
+            const resp = await fetchApi(`/search/episodes?userId=${userId}&pageNo=${page}&keyword=${keyword}`);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+
+            html += `<table class="w-full text-left table-fixed"><thead class="bg-gray-800"><tr>
+                        <th class="p-2 w-20">ID</th>
+                        <th class="p-2 w-48">Movie Title</th>
+                        <th class="p-2 w-40">Episode Name</th>
+                        <th class="p-2 w-80">Video URL</th>
+                        <th class="p-2 w-44">Actions</th>
+            </tr></thead><tbody>`;
+
+            list.forEach(ep => {
+                // Dữ liệu 'ep' là {episodeId, movieTitle, episodeName, videoUrl, movieId}
+
+                const movieTitleDisplay = ep.movieTitle
+                    ? escapeHtml(ep.movieTitle)
+                    : (ep.movieId === -1 ? '<em class="text-gray-500">Unlinked</em>' : `<span class="text-gray-500">ID: ${ep.movieId}</span>`);
+
+                html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${ep.episodeId}</td>
+
+                                <td class="p-2 truncate max-w-[180px]" title="${escapeHtml(ep.movieTitle || '')}">
+                                    ${movieTitleDisplay}
+                                </td>
+
+                                <td class="p-2 truncate" title="${escapeHtml(ep.episodeName)}">
+                                    ${escapeHtml(ep.episodeName)}
+                                </td>
+
+                                <td class="p-2 truncate max-w-[180px]" title="${escapeAttr(ep.videoUrl || '')}">
+                                    ${escapeHtml(ep.videoUrl || '')}
+                                </td>
+                                <td class="p-2">
+                                  <div class="flex space-x-2">
+                                    <button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showEpisodeEdit(${ep.episodeId})">Edit</button>
+                                    <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteEpisode(${ep.episodeId})">Delete</button>
+                                    <a class="px-2 py-1 bg-blue-600 rounded hover:bg-blue-700 text-white no-underline"
+                                       href="${escapeAttr(ep.videoUrl || '#')}"
+                                       target="_blank"
+                                       rel="noopener noreferrer">
+                                       View
+                                    </a>
+                                  </div>
+                                </td>
+                              </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('episodes', pageObj.totalPages, pageObj.number, 'loadEpisodes', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) { contentArea.innerHTML = `<div class="text-red-400">Lỗi episodes: ${err.message}</div>`; }
+    }
+
+    function showEpisodeCreate() {
+        openModal('Add Episode', `
+              <label class="block text-sm mb-1">Movie ID</label><input id="ep_movieId" class="w-full p-2 bg-gray-800 rounded" value="-1" readonly />
+              <label class="block text-sm mb-1">Name</label><input id="ep_name" class="w-full p-2 bg-gray-800 rounded"/>
+              <label class="block text-sm mb-1">Video URL</label><input id="ep_videoUrl" class="w-full p-2 bg-gray-800 rounded"/>
+              <div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button><button class="px-3 py-1 bg-rose-600 rounded" onclick="saveEpisode()">Save</button></div>
+            `);
+    }
+
+    async function showEpisodeEdit(id) {
+        try {
+            const r = await fetchApi(`/episode?userId=${userId}&episodeId=${id}`);
+            openModal('Edit Episode', `<label class="block text-sm mb-1">Movie ID</label><input id="ep_movieId" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.movieId)}"/><label class="block text-sm mb-1">Name</label><input id="ep_name" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.name)}"/><label class="block text-sm mb-1">Video URL</label><input id="ep_videoUrl" class="w-full p-2 bg-gray-800 rounded" value="${escapeAttr(r.data.data.videoUrl || '')}" /><div class="mt-3 flex justify-end gap-2"><button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button><button class="px-3 py-1 bg-rose-600 rounded" onclick="updateEpisode(${id})">Save</button></div>`);
+        } catch (e) {
+            showToast('Get episode fail', 'error');
+        }
+    }
+
+    async function saveEpisode() {
+        const payload = {
+            movieId: Number(document.getElementById('ep_movieId').value), name: document.getElementById('ep_name').value.trim(), videoUrl: document.getElementById('ep_videoUrl').value.trim()
+        };
+        try {
+            let json = await fetchApi(`/add/episode?userId=${userId}`, 'POST', payload);
+            if (json.status === 'Error') {
+                showError("Phim khôn tồn tại");
+                showToast("Error", 'error');
+            }
+            else {
+                showSuccess("Thêm tập phim thành công");
+                showToast('Added'); closeModal();
+                loadEpisodes(tabState.episodes.page, tabState.episodes.keyword);
+            }
+        } catch (error) {
+            showSuccess("Lỗi kết nối");
+            showToast('Error', 'error');
+        }
+    }
+
+    async function updateEpisode(id) {
+        const payload = { movieId: Number(document.getElementById('ep_movieId').value), name: document.getElementById('ep_name').value.trim(), videoUrl: document.getElementById('ep_videoUrl').value.trim() };
+        try {
+            let json = await fetchApi(`/update/episode?userId=${userId}&episodeId=${id}`, 'PUT', payload);
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã xập nhập tập phim');
+                closeModal();
+                loadEpisodes(tabState.episodes.page, tabState.episodes.keyword);
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast("Lỗi kết nối", 'error');
+        }
+    }
+
+    async function deleteEpisode(id) {
+        if (!confirm('Xoá episode?')) return;
+        try {
+            let json = await fetchApi(`/delete/episode?userId=${userId}&episodeId=${id}`, 'DELETE');
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast('Đã xoá tập phim');
+                loadEpisodes(tabState.episodes.page, tabState.episode.keyword);
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast("Lỗi kết nối", 'error');
+        }
+    }
+    function showAttachEpisode() { openAttachEntityToMovie('episode'); }
+    function showAttachEpisodeFor(epId) { openAttachEntityToMovie('episode', epId); }
+
+    // ---------- USERS ----------
+    async function loadUsers(page = 0, keyword = '') {
+        tabState.users.page = page;
+        tabState.users.keyword = keyword;
+        try {
+            let api = `/users?userId=${userId}&pageNo=${page}&`;
+            if (keyword && keyword.length > 0) {
+                api = "/search" + api + `keyword=${keyword}`;
+            }
+            const resp = await fetchApi(api);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+            html += `<table class="w-full text-left"><thead class="bg-gray-800"><tr><th class="p-2">ID</th><th class="p-2">Username</th><th class="p-2">Email</th><th class="p-2">State</th><th class="p-2">Role</th><th class="p-2">Actions</th></tr></thead><tbody>`;                list.forEach(u => {
+                html += `<tr class="border-t border-gray-700">
+                    <td class="p-2">${u.userId}</td>
+                    <td class="p-2">${escapeHtml(u.username)}</td>
+                    <td class="p-2">${escapeHtml(u.email)}</td>
+                    <td class="p-2">${u.state}</td>
+                    <td class="p-2">${u.role}</td>
+                    <td class="p-2"><button class="px-2 py-1 bg-green-600 rounded hover:bg-green-700" onclick="showUserEdit(${u.userId})">Edit</button> <button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteUser(${u.userId})">Delete</button></td>
+                  </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('users', pageObj.totalPages, pageObj.number, 'loadUsers', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) { contentArea.innerHTML = `<div class="text-red-400">Lỗi users: ${err.message}</div>`; }
+    }
+
+    function showUserCreate() {
+        openModal(
+            'Add User',
+            `
+              <label class="block text-sm mb-1">Username</label>
+              <input id="user_username" class="w-full p-2 bg-gray-800 rounded" placeholder="Enter username" />
+
+              <label class="block text-sm mb-1 mt-2">Email</label>
+              <input id="user_email" class="w-full p-2 bg-gray-800 rounded" type="email" placeholder="Enter email" />
+
+              <label class="block text-sm mb-1 mt-2">Password</label>
+              <input id="user_password" class="w-full p-2 bg-gray-800 rounded" type="password" placeholder="Enter password" />
+
+              <label class="block text-sm mb-1 mt-2">State</label>
+              <select id="user_state" class="w-full p-2 bg-gray-800 rounded">
+                <option value="PENDING" selected>PENDING</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="FIXING">FIXING</option>
+                <option value="REMOVED">REMOVED</option>
+              </select>
+
+              <label class="block text-sm mb-1 mt-2">Role</label>
+              <select id="user_role" class="w-full p-2 bg-gray-800 rounded">
+                <option value="USER" selected>USER</option>
+                <option value="ADMIN">ADMIN</option>
+              </select>
+
+              <div class="mt-4 flex justify-end gap-2">
+                <button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+                <button class="px-3 py-1 bg-green-600 rounded" onclick="saveUser()">Save</button>
+              </div>
+            `
+        );
+    }
+
+    async function showUserEdit(id) {
+        try {
+            const r = await fetchApi(`/user?userId=${userId}&targetUserId=${id}`);
+
+            openModal('Edit User', `
+              <label class="block text-sm mb-1">Username</label>
+              <input id="user_username" class="w-full p-2 bg-gray-800 rounded"
+                     value="${escapeAttr(r.data.data.username)}" />
+
+              <label class="block text-sm mb-1 mt-2">Email</label>
+              <input id="user_email" class="w-full p-2 bg-gray-800 rounded" type="email"
+                     value="${escapeAttr(r.data.data.email)}" />
+
+              <label class="block text-sm mb-1 mt-2">Password</label>
+              <input id="user_password" class="w-full p-2 bg-gray-800 rounded" type="text"
+                     value="${escapeAttr(r.data.data.password)}" />
+
+              <label class="block text-sm mb-1 mt-2">State</label>
+              <select id="user_state" class="w-full p-2 bg-gray-800 rounded">
+                <option value="PENDING" ${r.data.data.state === 'PENDING' ? 'selected' : ''}>PENDING</option>
+                <option value="ACTIVE" ${r.data.data.state === 'ACTIVE' ? 'selected' : ''}>ACTIVE</option>
+                <option value="FIXING" ${r.data.data.state === 'FIXING' ? 'selected' : ''}>FIXING</option>
+                <option value="REMOVED" ${r.data.data.state === 'REMOVED' ? 'selected' : ''}>REMOVED</option>
+              </select>
+
+              <label class="block text-sm mb-1 mt-2">Role</label>
+              <select id="user_role" class="w-full p-2 bg-gray-800 rounded">
+                <option value="USER" ${r.data.data.role === 'USER' ? 'selected' : ''}>USER</option>
+                <option value="ADMIN" ${r.data.data.role === 'ADMIN' ? 'selected' : ''}>ADMIN</option>
+              </select>
+
+              <div class="mt-4 flex justify-end gap-2">
+                <button class="px-3 py-1 bg-gray-700 rounded" onclick="closeModal()">Cancel</button>
+                <button class="px-3 py-1 bg-rose-600 rounded" onclick="updateUser(${id})">Save</button>
+              </div>
+            `);
+        } catch (e) {
+            showToast('Get user fail', 'error');
+        }
+    }
+
+
+    async function saveUser() {
+        const payload = {
+            username: document.getElementById('user_username').value.trim(),
+            email: document.getElementById('user_email').value.trim(),
+            password: document.getElementById('user_password').value.trim(),
+            state: document.getElementById('user_state').value,
+            role: document.getElementById('user_role').value
+        };
+
+        try {
+            let json = await fetchApi(`/add/user?userId=${userId}`, 'POST', payload);
+
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            } else {
+                showSuccess(json.message);
+                showToast(json.message);
+                closeModal();
+                loadUsers(tabState.users.page, tabState.users.keyword);
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast('Error', 'error');
+        }
+    }
+
+    async function updateUser(id) {
+        const payload = {
+            username: document.getElementById('user_username').value.trim(),
+            email: document.getElementById('user_email').value.trim(),
+            password: document.getElementById('user_password').value.trim(), // có thể bỏ trống
+            state: document.getElementById('user_state').value,
+            role: document.getElementById('user_role').value
+        };
+
+        try {
+            let json = await fetchApi(`/update/user?userId=${userId}&targetUserId=${id}`, 'PUT', payload);
+
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            } else {
+                showSuccess(json.message || "Cập nhật user thành công");
+                showToast('Đã cập nhật user');
+                closeModal();
+                loadUsers && loadUsers(); // nếu có hàm loadUsers thì gọi để refresh
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast("Lỗi kết nối", 'error');
+        }
+    }
+
+
+    async function deleteUser(id) {
+        if (!confirm('Xoá user?')) return;
+        try {
+            let json = await fetchApi(`/delete/user?userId=${userId}&targetUserId=${id}`, 'DELETE');
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast(json.message);
+                loadUsers(tabState.users.page, tabState.users.keyword);
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast("Lỗi kết nối", 'error');
+        }
+
+    }
+
+    // ---------- COMMENTS ----------
+    async function loadComments(page = 0, keyword) {
+        tabState.comments.page = page;
+        tabState.comments.keyword = keyword;
+        try {
+            let api = `/comments?userId=${userId}&pageNo=${page}&`;
+            if (keyword && keyword.length > 0) {
+                api = "/search" + api + `keyword=${keyword}`;
+            }
+            const resp = await fetchApi(api);
+            const pageObj = resp.data.data;
+            const list = pageObj.content || [];
+            let html = `<div class="text-sm text-gray-300 mb-2">Total: ${pageObj.totalElements ?? list.length}</div>`;
+            html += `
+            <table class="w-full text-left table-fixed">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="p-2 w-[5%]">ID</th>
+                        <th class="p-2 w-[10%]">User</th>
+                        <th class="p-2 w-[10%]">Movie</th>
+                        <th class="p-2 w-[45%]">Content</th> <th class="p-2 w-[20%]">Created</th> <th class="p-2 w-[10%]">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            list.forEach(c => {
+                html += `<tr class="border-t border-gray-700">
+                                <td class="p-2">${c.commentId}</td>
+                                <td class="p-2">${escapeHtml(c.userId ? String(c.userId) : '')}</td>
+                                <td class="p-2">${escapeHtml(c.movieId ? String(c.movieId) : '')}</td>
+                                <td class="p-2">${escapeHtml(c.content)}</td>
+                                <td class="p-2">${c.createdAt || ''}</td>
+                                <td class="p-2"><button class="px-2 py-1 bg-red-600 rounded hover:bg-red-700" onclick="deleteComment(${c.commentId})">Delete</button></td>
+                              </tr>`;
+            });
+            html += `</tbody></table>`;
+            html += renderPagination('comments', pageObj.totalPages, pageObj.number, 'loadComments', keyword);
+            contentArea.innerHTML = html;
+        } catch (err) { contentArea.innerHTML = `<div class="text-red-400">Lỗi comments: ${err.message}</div>`; }
+    }
+    async function deleteComment(id) {
+        if (!confirm('Xoá comment?')) return;
+        try {
+            let json = await fetchApi(`/delete/comment?userId=${userId}&targetCommentId=${id}`, 'DELETE');
+            if (json.status === 'Error') {
+                showError(json.message);
+                showToast(json.message, 'error');
+            }
+            else {
+                showSuccess(json.message);
+                showToast(json.message);
+                loadComments(tabState.comments.page, tabState.comments.keyword);
+            }
+        } catch (error) {
+            showError("Lỗi kết nối");
+            showToast("Lỗi kết nối", 'error');
+        }
+    }
+
+    // ---------- Misc helpers ----------
+    function escapeHtml(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]; }); }
+    function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+    function debounce(fn, delay = 300) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); }; }
+
+    // expose some functions for pagination inline onclick
+    window.loadMovies = loadMovies;
+    window.loadGenres = loadGenres;
+    window.loadActors = loadActors;
+    window.loadDirectors = loadDirectors;
+    window.loadEpisodes = loadEpisodes;
+    window.loadUsers = loadUsers;
+    window.loadComments = loadComments;
+
+    /* --- NEW: movie detail modal manager ---
+   Paste this into your existing <script> (after helper functions).
+   It uses the existing `modal`, `openModal`, `closeModal`, `fetchApi`, `showToast`, `showSuccess`, `showError` functions.
+   It expects API routes under API_BASE + `/movies/...` as in backend sample below.
+*/
+
+    async function openMovieDetailModal(movieId) {
+        // fetch full movie details (movie + actors + directors + episodes + comments)
+        try {
+            const resp = await fetchApi(`/get/movie?userId=${userId}&movieId=${movieId}`); // GET
+            const data = resp.data || resp; // depending on your response wrapper
+            // if your backend returns { data: { ... } } adjust accordingly
+            const payload = data.data || data; // try both
+            console.log(payload);
+            renderMovieDetailModal(payload);
+        } catch (err) {
+            showError("Không lấy được chi tiết movie");
+        }
+    }
+
+    function renderMovieDetailModal(payload) {
+        // payload: { movie, actors, directors, episodes, comments }
+        const movie = payload.movie || payload;
+        const actors = payload.actors || [];
+        const directors = payload.directors || [];
+        const episodes = payload.episodes || [];
+        const comments = payload.comments || [];
+
+        // Build tabs + initial content. Use existing modal element (id="modal")
+        const html = `
+          <div class="p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-xl font-semibold">Manage: ${escapeHtml(movie.title || ('#' + movie.movieId))}</h3>
+              <div class="text-sm text-gray-400">ID: ${movie.movieId || ''}</div>
+            </div>
+
+            <div class="mb-4">
+              <nav class="flex gap-2 text-sm">
+                <button class="px-3 py-1 bg-rose-600 rounded text-white tab-btn" data-tab="actors">Actors (${actors.length})</button>
+                <button class="px-3 py-1 bg-rose-600 rounded text-white tab-btn" data-tab="directors">Directors (${directors.length})</button>
+                <button class="px-3 py-1 bg-rose-600 rounded text-white tab-btn" data-tab="episodes">Episodes (${episodes.length})</button>
+                <button class="px-3 py-1 bg-rose-600 rounded text-white tab-btn" data-tab="comments">Comments (${comments.length})</button>
+              </nav>
+            </div>
+
+            <div id="movieDetailTabContent" class="text-sm">
+              <!-- dynamic tab content -->
+            </div>
+          </div>
+        `;
+
+        openModal(`Manage Movie`, html);
+
+        // initial render = actors tab
+        const tabContent = document.getElementById('movieDetailTabContent');
+        const tabButtons = document.querySelectorAll('#modal .tab-btn');
+        tabButtons.forEach(btn => btn.addEventListener('click', () => {
+            tabButtons.forEach(b => b.classList.remove('opacity-70'));
+            btn.classList.add('opacity-70');
+            renderTabContent(btn.dataset.tab, { movie, actors, directors, episodes, comments });
+        }));
+        // click first
+        const first = tabButtons[0];
+        if (first) { first.click(); }
+    }
+
+    function renderTabContent(tab, payload) {
+        const { movie, actors, directors, episodes, comments } = payload;
+        const root = document.getElementById('movieDetailTabContent');
+        if (!root) return;
+
+        // ==========================================================
+        // TAB ACTORS
+        // ==========================================================
+        if (tab === 'actors') {
+            root.innerHTML = `
+            <div>
+                <div class="mb-2 flex items-center gap-2">
+                    <input id="actorSearchInput" class="p-2 bg-gray-800 rounded w-full" placeholder="Tìm actor... (gõ tên rồi Enter)"/>
+                    <button id="actorSearchBtn" class="px-3 py-1 bg-blue-600 rounded">Search</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="font-medium">Current Actors</div>
+                            <button id="removeSelectedActorsBtn" class="px-3 py-1 bg-red-600 rounded text-sm">Remove selected</button>
+                        </div>
+                        <ul id="currentActorsList" class="space-y-1 max-h-48 overflow-auto border p-2 rounded bg-gray-800"></ul>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">\
+                            <div class="font-medium mb-2">Search Results</div>
+                            <div class="mt-2 flex justify-end gap-2">
+                                <button id="addSelectedActorsBtn" class="px-3 py-1 bg-green-600 rounded">Add selected</button>
+                            </div>
+                        </div>
+
+                        <ul id="actorSearchResults" class="space-y-1 max-h-48 overflow-auto border p-2 rounded bg-gray-800"></ul>
+
+                    </div>
+                </div>
+            </div>
+        `;
+
+            const currentUl = document.getElementById('currentActorsList');
+            actors.forEach(a => {
+                currentUl.insertAdjacentHTML('beforeend', `
+                <li class="flex justify-between items-center p-1 bg-gray-900 rounded">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" value="${a.actorId}"/>
+                        <span>${escapeHtml(a.name)} (ID:${a.actorId})</span>
+                    </label>
+            `);
+            });
+
+            document.getElementById('actorSearchBtn').addEventListener('click', () => doActorSearch(movie.movieId));
+            document.getElementById('actorSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doActorSearch(movie.movieId); });
+
+            document.getElementById('addSelectedActorsBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#actorSearchResults input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 actor', 'error');
+                try {
+                    await fetchApi(`/add/actors?userId=${userId}&movieId=${movie.movieId}`, 'POST', ids);
+                    showSuccess('Đã thêm actor(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Thêm actor thất bại'); }
+            });
+
+            document.getElementById('removeSelectedActorsBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#currentActorsList input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 actor để xoá', 'error');
+                if (!confirm(`Xoá ${ids.length} actor khỏi movie này?`)) return;
+                try {
+                    await fetchApi(`/delete/actors-from-movie?userId=${userId}&movieId=${movie.movieId}`, 'DELETE', ids);
+                    showSuccess('Đã xoá actor(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Xoá actor thất bại'); }
+            });
+        }
+
+            // ==========================================================
+            // TAB DIRECTORS
+        // ==========================================================
+        else if (tab === 'directors') {
+            root.innerHTML = `
+            <div>
+                <div class="mb-2 flex items-center gap-2">
+                    <input id="directorSearchInput" class="p-2 bg-gray-800 rounded w-full" placeholder="Tìm director... (gõ tên rồi Enter)"/>
+                    <button id="directorSearchBtn" class="px-3 py-1 bg-blue-600 rounded">Search</button>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="font-medium">Current Directors</div>
+                            <button id="removeSelectedDirectorsBtn" class="px-3 py-1 bg-red-600 rounded text-sm">Remove selected</button>
+                        </div>
+                        <ul id="currentDirectorsList" class="space-y-1 max-h-48 overflow-auto border p-2 rounded bg-gray-800"></ul>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="font-medium mb-2">Search Results</div>
+                            <div class="mt-2 flex justify-end gap-2">
+                                <button id="addSelectedDirectorsBtn" class="px-3 py-1 bg-rose-600 rounded">Add selected</button>
+                            </div>
+                        </div>
+
+                        <ul id="directorSearchResults" class="space-y-1 max-h-48 overflow-auto border p-2 rounded bg-gray-800"></ul>
+
+                    </div>
+                </div>
+            </div>
+        `;
+            const cur = document.getElementById('currentDirectorsList');
+            directors.forEach(d => {
+                cur.insertAdjacentHTML('beforeend', `
+                <li class="flex justify-between items-center p-1 bg-gray-900 rounded">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" value="${d.directorId}"/>
+                        <span>${escapeHtml(d.name)} (ID:${d.directorId})</span>
+                    </label>
+
+                </li>
+            `);
+            });
+
+            document.getElementById('directorSearchBtn').addEventListener('click', () => doDirectorSearch(movie.movieId));
+            document.getElementById('directorSearchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doDirectorSearch(movie.movieId); });
+
+            document.getElementById('addSelectedDirectorsBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#directorSearchResults input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 director', 'error');
+                try {
+                    await fetchApi(`/add/directors?userId=${userId}&movieId=${movie.movieId}`, 'POST', ids);
+                    showSuccess('Đã thêm director(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Thêm director thất bại'); }
+            });
+
+            document.getElementById('removeSelectedDirectorsBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#currentDirectorsList input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 director để xoá', 'error');
+                if (!confirm(`Xoá ${ids.length} director khỏi movie này?`)) return;
+                try {
+                    await fetchApi(`/delete/directors-from-movie?userId=${userId}&movieId=${movie.movieId}`, 'DELETE', ids);
+                    showSuccess('Đã xoá director(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Xoá director thất bại'); }
+            });
+        }
+
+            // ==========================================================
+            // TAB EPISODES
+        // ==========================================================
+        else if (tab === 'episodes') {
+            root.innerHTML = `
+        <div>
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Danh sách tập hiện có -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-medium">Current Episodes</div>
+                        <button id="removeSelectedEpisodesBtn" class="px-3 py-1 bg-red-600 rounded text-sm">Remove selected</button>
+                    </div>
+                    <ul id="currentEpisodesList" class="space-y-1 max-h-64 overflow-auto border p-2 rounded bg-gray-800"></ul>
+                </div>
+
+                <!-- Danh sách tập chưa thêm -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="font-medium mb-2">Unlinked Episodes</div>
+                        <div class="mt-2 flex justify-end gap-2">
+                            <button id="addSelectedEpisodesBtn" class="px-3 py-1 bg-rose-600 rounded">Add selected</button>
+                        </div>
+                    </div>
+                    <ul id="episodeSearchResults" class="space-y-1 max-h-64 overflow-auto border p-2 rounded bg-gray-800"></ul>
+                    <div id="episodePagination" class="flex justify-center gap-2 mt-2"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+            // --- render danh sách hiện có ---
+            const cur = document.getElementById('currentEpisodesList');
+            episodes.forEach(ep => {
+                cur.insertAdjacentHTML('beforeend', `
+            <li class="flex justify-between items-center p-1 bg-gray-900 rounded">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" value="${ep.episodeId}"/>
+                    <span>${escapeHtml(ep.name)} (ID:${ep.episodeId})</span>
+                </label>
+                <div class="flex gap-2">
+                    <a class="px-2 py-1 bg-gray-700 rounded" href="${escapeAttr(ep.videoUrl || '#')}" target="_blank">View</a>
+
+                </div>
+            </li>
+        `);
+            });
+
+            // --- tải tập phim chưa được thêm (phân trang) ---
+            loadUnlinkedEpisodes(movie.movieId, 0);
+
+            // --- thêm tập phim ---
+            document.getElementById('addSelectedEpisodesBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#episodeSearchResults input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 episode để thêm', 'error');
+                try {
+                    await fetchApi(`/add/episodes?userId=${userId}&movieId=${movie.movieId}`, 'POST', ids);
+                    showSuccess('Đã thêm episode(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Thêm episode thất bại'); }
+            });
+
+            // --- xóa tập phim hiện có ---
+            document.getElementById('removeSelectedEpisodesBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#currentEpisodesList input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 episode để xoá', 'error');
+                if (!confirm(`Xoá ${ids.length} episode khỏi movie này?`)) return;
+                try {
+                    await fetchApi(`/delete/episodes-from-movie?userId=${userId}&movieId=${movie.movieId}`, 'DELETE', ids);
+                    showSuccess('Đã xoá episode(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Xoá episode thất bại'); }
+            });
+        }
+
+
+            // ==========================================================
+            // 💬 TAB COMMENTS
+        // ==========================================================
+        else if (tab === 'comments') {
+            root.innerHTML = `
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <div class="font-medium">Comments</div>
+                    <button id="removeSelectedCommentsBtn" class="px-3 py-1 bg-red-600 rounded text-sm">Remove selected</button>
+                </div>
+                <ul id="currentCommentsList" class="space-y-1 max-h-56 overflow-auto border p-2 rounded bg-gray-800"></ul>
+            </div>
+        `;
+            const cul = document.getElementById('currentCommentsList');
+            comments.forEach(c => {
+                cul.insertAdjacentHTML('beforeend', `
+                <li class="flex justify-between items-start p-2 bg-gray-900 rounded">
+                    <label class="flex items-start gap-2">
+                        <input type="checkbox" value="${c.commentId}"/>
+                        <div>
+                            <div class="text-sm font-medium">
+                                User: ${escapeHtml(String(c.username || ''))} - ${escapeHtml(String(c.createdAt || ''))}
+                            </div>
+                            <div class="text-sm mt-1">${escapeHtml(c.content)}</div>
+                        </div>
+                    </label>
+
+                </li>
+            `);
+            });
+
+            document.getElementById('removeSelectedCommentsBtn').addEventListener('click', async () => {
+                const ids = Array.from(document.querySelectorAll('#currentCommentsList input:checked')).map(ch => +ch.value);
+                if (!ids.length) return showToast('Chọn ít nhất 1 comment để xoá', 'error');
+                if (!confirm(`Xoá ${ids.length} comment khỏi movie này?`)) return;
+                try {
+                    await fetchApi(`/delete/comments?userId=${userId}`, 'DELETE', ids);
+                    showSuccess('Đã xoá comment(s)');
+                    await refreshMovieModal(movie.movieId);
+                } catch { showError('Xoá comment thất bại'); }
+            });
+        }
+    }
+
+    // helper to re-fetch details and re-render modal (keeps it in sync)
+    async function refreshMovieModal(movieId) {
+        try {
+            const resp = await fetchApi(`/get/movie?userId=${userId}&movieId=${movieId}`);
+            const payload = resp.data || resp;
+            // replace existing content by re-rendering modal (keeps modal open)
+            renderMovieDetailModal(payload.data || payload);
+        } catch (e) {
+            showError('Không thể refresh movie details');
+        }
+    }
+
+    /* --- Search helper functions --- */
+    async function doActorSearch(movieId, page = 0, keyword = null) {
+        const input = document.getElementById('actorSearchInput');
+        const kw = keyword ?? input.value.trim();
+        if (!kw) return showToast('Nhập tên actor để tìm kiếm', 'error');
+
+        try {
+            const resp = await fetchApi(`/search/actors?userId=${userId}&keyword=${encodeURIComponent(kw)}&pageNo=${page}`);
+            const pageObj = resp.data.data || resp; // tùy cấu trúc backend
+            const list = pageObj.content || [];
+            const totalPages = pageObj.totalPages || 1;
+            const currentPage = pageObj.number || 0;
+            const ul = document.getElementById('actorSearchResults');
+
+            // render list
+            ul.innerHTML = '';
+            list.forEach(a => {
+                ul.insertAdjacentHTML('beforeend', `
+                <li class="flex items-center justify-between bg-gray-900 rounded p-1">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" value="${a.actorId}"/>
+                        <span>${escapeHtml(a.name)} (ID:${a.actorId})</span>
+                    </label>
+                </li>
+            `);
+            });
+
+            // --- render pagination ---
+            const paginationDivId = 'actorSearchPagination';
+            let paginationDiv = document.getElementById(paginationDivId);
+            if (!paginationDiv) {
+                paginationDiv = document.createElement('div');
+                paginationDiv.id = paginationDivId;
+                paginationDiv.className = 'flex flex-wrap justify-center gap-1 mt-2';
+                ul.insertAdjacentElement('afterend', paginationDiv);
+            }
+
+            const maxButtons = 3; // số nút số trang hiển thị
+            const start = Math.max(0, currentPage - Math.floor(maxButtons / 2));
+            const end = Math.min(totalPages, start + maxButtons);
+
+            let html = '';
+
+            // First + Prev
+            html += `
+                    <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${currentPage > 0 ? `onclick="doActorSearch(${movieId}, 0, '${kw}')"` : ''}>
+                        First
+                    </button>
+                    <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${currentPage > 0 ? `onclick="doActorSearch(${movieId}, ${currentPage - 1}, '${kw}')"` : ''}>
+                        Prev
+                    </button>
+                `;
+
+            // Page numbers
+            for (let i = start; i < end; i++) {
+                html += `
+                <button class="px-2 py-1 rounded ${i === currentPage ? 'bg-rose-600 text-white' : 'bg-gray-700'}"
+                    onclick="doActorSearch(${movieId}, ${i}, '${kw}')">
+                    ${i + 1}
+                </button>
+            `;
+            }
+
+            // Next + Last
+            html += `
+                    <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${currentPage < totalPages - 1 ? `onclick="doActorSearch(${movieId}, ${currentPage + 1}, '${kw}')"` : ''}>
+                        Next
+                    </button>
+                    <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                        ${currentPage < totalPages - 1 ? `onclick="doActorSearch(${movieId}, ${totalPages - 1}, '${kw}')"` : ''}>
+                        Last
+                    </button>
+                `;
+
+            paginationDiv.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            showError('Lỗi khi tìm kiếm actor');
+        }
+    }
+
+
+    async function doDirectorSearch(movieId, page = 0, keyword = null) {
+        const input = document.getElementById('directorSearchInput');
+        const kw = keyword ?? input.value.trim();
+        if (!kw) return showToast('Nhập tên đạo diễn để tìm kiếm', 'error');
+
+        try {
+            const resp = await fetchApi(`/search/directors?userId=${userId}&keyword=${encodeURIComponent(kw)}&pageNo=${page}`);
+            const pageObj = resp.data.data || resp; // tùy backend
+            const list = pageObj.content || [];
+            const totalPages = pageObj.totalPages || 1;
+            const currentPage = pageObj.number || 0;
+            const ul = document.getElementById('directorSearchResults');
+
+            // render danh sách
+            ul.innerHTML = '';
+            list.forEach(d => {
+                ul.insertAdjacentHTML('beforeend', `
+                <li class="flex items-center justify-between bg-gray-900 rounded p-1">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" value="${d.directorId}"/>
+                        <span>${escapeHtml(d.name)} (ID:${d.directorId})</span>
+                    </label>
+                </li>
+            `);
+            });
+
+            // --- render pagination ---
+            const paginationDivId = 'directorSearchPagination';
+            let paginationDiv = document.getElementById(paginationDivId);
+            if (!paginationDiv) {
+                paginationDiv = document.createElement('div');
+                paginationDiv.id = paginationDivId;
+                paginationDiv.className = 'flex flex-wrap justify-center gap-1 mt-2';
+                ul.insertAdjacentElement('afterend', paginationDiv);
+            }
+
+            const maxButtons = 3;
+            const start = Math.max(0, currentPage - Math.floor(maxButtons / 2));
+            const end = Math.min(totalPages, start + maxButtons);
+
+            let html = '';
+
+            // First + Prev
+            html += `
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage > 0 ? `onclick="doDirectorSearch(${movieId}, 0, '${kw}')"` : ''}>
+                First
+            </button>
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage > 0 ? `onclick="doDirectorSearch(${movieId}, ${currentPage - 1}, '${kw}')"` : ''}>
+                Prev
+            </button>
+        `;
+
+            // Page numbers
+            for (let i = start; i < end; i++) {
+                html += `
+                <button class="px-2 py-1 rounded ${i === currentPage ? 'bg-rose-600 text-white' : 'bg-gray-700'}"
+                    onclick="doDirectorSearch(${movieId}, ${i}, '${kw}')">
+                    ${i + 1}
+                </button>
+            `;
+            }
+
+            // Next + Last
+            html += `
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage < totalPages - 1 ? `onclick="doDirectorSearch(${movieId}, ${currentPage + 1}, '${kw}')"` : ''}>
+                Next
+            </button>
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage < totalPages - 1 ? `onclick="doDirectorSearch(${movieId}, ${totalPages - 1}, '${kw}')"` : ''}>
+                Last
+            </button>
+        `;
+
+            paginationDiv.innerHTML = html;
+
+        } catch (e) {
+            console.error(e);
+            showError('Lỗi khi tìm kiếm đạo diễn');
+        }
+    }
+
+
+
+
+
+    // ==========================================================
+    // HÀM TẢI DANH SÁCH TẬP PHIM CHƯA ĐƯỢC THÊM
+    // ==========================================================
+    async function loadUnlinkedEpisodes(movieId, page = 0) {
+        const ul = document.getElementById('episodeSearchResults');
+        const paginationDiv = document.getElementById('episodePagination');
+        ul.innerHTML = `<li class="text-gray-400 italic">Đang tải...</li>`;
+        paginationDiv.innerHTML = '';
+
+        try {
+            const resp = await fetchApi(`/episodes/unlinked?userId=${userId}&pageNo=${page}`);
+            const pageObj = resp.data?.data || resp;
+            const list = pageObj.content || [];
+            const totalPages = pageObj.totalPages || 1;
+            const currentPage = pageObj.number || 0;
+
+            ul.innerHTML = '';
+            if (!list.length) {
+                ul.innerHTML = `<li class="text-gray-400 italic">Không còn tập phim nào chưa được thêm</li>`;
+                return;
+            }
+
+            // --- render danh sách ---
+            list.forEach(ep => {
+                ul.insertAdjacentHTML('beforeend', `
+                <li class="flex justify-between items-center p-1 bg-gray-900 rounded">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" value="${ep.episodeId}"/>
+                        <span>${escapeHtml(ep.name)} (ID:${ep.episodeId})</span>
+                    </label>
+                    <a class="px-2 py-1 bg-gray-700 rounded" href="${escapeAttr(ep.videoUrl || '#')}" target="_blank">View</a>
+                </li>
+            `);
+            });
+
+            // --- render phân trang ---
+            const maxButtons = 3;
+            const start = Math.max(0, currentPage - Math.floor(maxButtons / 2));
+            const end = Math.min(totalPages, start + maxButtons);
+
+            let html = '';
+            html += `
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage > 0 ? `onclick="loadUnlinkedEpisodes(${movieId}, 0)"` : ''}>First</button>
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage > 0 ? `onclick="loadUnlinkedEpisodes(${movieId}, ${currentPage - 1})"` : ''}>Prev</button>
+        `;
+
+            for (let i = start; i < end; i++) {
+                html += `
+                <button class="px-2 py-1 rounded ${i === currentPage ? 'bg-rose-600 text-white' : 'bg-gray-700'}"
+                    onclick="loadUnlinkedEpisodes(${movieId}, ${i})">${i + 1}</button>
+            `;
+            }
+
+            html += `
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage < totalPages - 1 ? `onclick="loadUnlinkedEpisodes(${movieId}, ${currentPage + 1})"` : ''}>Next</button>
+            <button class="px-2 py-1 bg-gray-700 rounded ${currentPage >= totalPages - 1 ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${currentPage < totalPages - 1 ? `onclick="loadUnlinkedEpisodes(${movieId}, ${totalPages - 1})"` : ''}>Last</button>
+        `;
+
+            paginationDiv.innerHTML = html;
+
+        } catch (err) {
+            console.error(err);
+            ul.innerHTML = `<li class="text-red-500 italic">Lỗi khi tải tập phim</li>`;
+        }
+    }
+
+    /* --- detach / delete actions --- */
+    // REMOVE THIS PLS
+    async function detachActorFromMovie(movieId, actorId, btnEl) {
+        if (!confirm('Xóa actor khỏi movie?')) return;
+        try {
+            await fetchApi(`/delete/actor-from-movie?userId=${userId}&movieId=${movieId}&actorId=${actorId}`, 'DELETE');
+            showSuccess('Đã xóa actor khỏi movie');
+            // remove DOM row quickly
+            if (btnEl) btnEl.closest('li')?.remove();
+        } catch (e) { showError('Xóa actor thất bại'); }
+    }
+
+    async function detachDirectorFromMovie(movieId, directorId, btnEl) {
+        if (!confirm('Xóa director khỏi movie?')) return;
+        try {
+            await fetchApi(`/delete/director-from-movie?userId=${userId}&movieId=${movieId}&directorId=${directorId}`, 'DELETE');
+            showSuccess('Đã xóa director khỏi movie');
+            if (btnEl) btnEl.closest('li')?.remove();
+        } catch (e) { showError('Xóa director thất bại'); }
+    }
+
+    async function detachEpisodeFromMovie(movieId, episodeId, btnEl) {
+        if (!confirm('Xóa episode khỏi movie?')) return;
+        try {
+            await fetchApi(`/movies/${movieId}/episodes/${episodeId}`, 'DELETE');
+            if (btnEl) btnEl.closest('li')?.remove();
+        } catch (e) { showError('Xóa episode thất bại'); }
+    }
+
+    async function deleteCommentFromMovie(movieId, commentId, btnEl) {
+        if (!confirm('Xóa comment?')) return;
+        try {
+            await fetchApi(`/movies/${movieId}/comments/${commentId}`, 'DELETE');
+            showSuccess('Đã xóa comment');
+            if (btnEl) btnEl.closest('li')?.remove();
+        } catch (e) { showError('Xóa comment thất bại'); }
+    }
+
+    /* --- END of NEW modal manager --- */
+
+
+    // initial load
+    //openMovieDetailModal(1)
+    loadPage('dashboard');
+
+
+    // ---------- HOT MOVIES: load hot films ----------
+    async function loadHotMovies() {
+        try {
+            const resp = await fetchApi(`/hot-movies?userId=${userId}`);
+
+            if (resp.status === 'Success') {
+                const data = resp.data.data;
+                const seriesMovies = data.series || [];
+                const fullMovies = data.full || [];
+
+                let html = `
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Phim có tập (Series) -->
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <h3 class="text-xl font-bold mb-4 text-rose-500 flex items-center gap-2">
+                            <i class="fa-solid fa-film"></i>
+                            Hot Series (Phim có tập)
+                            <span class="text-sm text-gray-400">(${seriesMovies.length})</span>
+                        </h3>
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto">
+                            ${renderHotMovieList(seriesMovies, 'series')}
+                        </div>
+                    </div>
+
+                    <!-- Phim Full -->
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <h3 class="text-xl font-bold mb-4 text-blue-500 flex items-center gap-2">
+                            <i class="fa-solid fa-video"></i>
+                            Hot Full Movies
+                            <span class="text-sm text-gray-400">(${fullMovies.length})</span>
+                        </h3>
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto">
+                            ${renderHotMovieList(fullMovies, 'full')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                contentArea.innerHTML = html;
+            } else {
+                contentArea.innerHTML = `<div class="text-red-400">Lỗi khi tải hot movies: ${resp.message}</div>`;
+            }
+        } catch (err) {
+            contentArea.innerHTML = `<div class="text-red-400">Lỗi khi tải hot movies: ${err.message}</div>`;
+        }
+    }
+
+    function renderHotMovieList(movies, type) {
+        if (!movies || movies.length === 0) {
+            return `<div class="text-gray-400 text-center py-8 italic">Chưa có phim nào</div>`;
+        }
+
+        return movies.map((movie, index) => {
+            const rank = index + 1;
+            let rankBadge = '';
+            let bgClass = '';
+
+            if (rank === 1) {
+                rankBadge = '🥇';
+                bgClass = 'bg-yellow-900 bg-opacity-30 border-yellow-600';
+            } else if (rank === 2) {
+                rankBadge = '🥈';
+                bgClass = 'bg-gray-600 bg-opacity-30 border-gray-400';
+            } else if (rank === 3) {
+                rankBadge = '🥉';
+                bgClass = 'bg-orange-900 bg-opacity-30 border-orange-600';
+            } else {
+                rankBadge = `<span class="text-gray-400 font-bold">#${rank}</span>`;
+                bgClass = 'bg-gray-900 border-gray-700';
+            }
+
+            return `
+            <div class="flex items-center justify-between p-3 rounded border ${bgClass} hover:bg-opacity-50 transition">
+                <div class="flex items-center gap-3 flex-1">
+                    <div class="text-2xl w-8 text-center">${rankBadge}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-semibold truncate text-white" title="${escapeHtml(movie.title)}">
+                            ${escapeHtml(movie.title)}
+                        </div>
+                        <div class="text-xs text-gray-400 flex gap-3 mt-1">
+                            <span>ID: ${movie.movieId}</span>
+                            <span>📅 ${movie.releaseYear || 'N/A'}</span>
+                            <span>🌍 ${movie.country || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-right">
+                        <div class="text-sm text-gray-400">Lượt xem</div>
+                        <div class="text-lg font-bold text-rose-500">
+                            ${formatViews(movie.views)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+    }
+
+    function formatViews(views) {
+        if (!views) return '0';
+        if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M';
+        if (views >= 1000) return (views / 1000).toFixed(1) + 'K';
+        return views.toLocaleString();
+    }
+
+    // Cập nhật loadPage để hỗ trợ hot-movies
+    async function loadPage(tab) {
+        currentTab = tab;
+        pageTitle.innerText = {
+            dashboard: 'Dashboard',
+            movies: 'Movies',
+            genres: 'Genres',
+            actors: 'Actors',
+            directors: 'Directors',
+            episodes: 'Episodes',
+            users: 'Users',
+            comments: 'Comments',
+            'hot-movies': 'Hot Films'
+        }[tab] || tab;
+
+        headerActions.innerHTML = '';
+        headerActions.className = 'flex flex-col justify-between items-center w-full px-4';
+
+        const topHeaderActions = document.createElement('div');
+        topHeaderActions.className = 'flex flex-row items-center justify-between flex-1 w-full';
+        const centerContainer = document.createElement('div');
+        centerContainer.className = 'flex justify-center flex-1';
+        headerActions.appendChild(topHeaderActions);
+
+        // [SỬA] Không hiển thị search và nút Add cho 'hot-movies' VÀ 'dashboard'
+        if (tab !== 'hot-movies' && tab !== 'dashboard') {
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text';
+            searchInput.placeholder = 'Search...';
+            searchInput.className = `
+                px-4 py-2 rounded-lg text-white bg-black
+                placeholder-gray-400 focus:outline-none
+                focus:ring-2 focus:ring-blue-400 w-80
+            `;
+            let searchTimer;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimer);
+                const keyword = e.target.value.trim();
+                searchTimer = setTimeout(() => {
+                    performSearch(currentTab, keyword);
+                }, 500);
+            });
+            centerContainer.appendChild(searchInput);
+
+            const addBtn = document.createElement('button');
+            addBtn.className = `
+                px-4 py-2 bg-green-600 hover:bg-green-700
+                text-white rounded-lg font-semibold ml-4
+            `;
+            addBtn.innerText = '+ Add';
+            addBtn.addEventListener('click', () => {
+                const fn = {
+                    movies: showMovieCreate,
+                    genres: showGenreCreate,
+                    actors: showActorCreate,
+                    directors: showDirectorCreate,
+                    episodes: showEpisodeCreate,
+                    users: showUserCreate,
+                    comments: () => showToast('Không được nhét chữ!', 'error')
+                }[tab];
+                fn && fn();
+            });
+            topHeaderActions.appendChild(addBtn);
+        }
+
+        // Gắn tiêu đề vào lại header
+        topHeaderActions.insertBefore(pageTitle, topHeaderActions.firstChild);
+        topHeaderActions.appendChild(centerContainer);
+
+        const loader = {
+            dashboard: loadDashboard, // Đảm bảo có dashboard ở đây
+            movies: loadMovies,
+            genres: loadGenres,
+            actors: loadActors,
+            directors: loadDirectors,
+            episodes: loadEpisodes,
+            users: loadUsers,
+            'hot-movies': loadHotMovies,
+            comments: loadComments
+        }[tab];
+        loader && loader(tabState[tab]?.page || 0);
+    }
+
+    // ---------- DASHBOARD ----------
+    async function loadDashboard() {
+        currentTab = 'dashboard';
+        // [SỬA] Không xóa headerActions.innerHTML = '' nữa vì loadPage đã lo việc hiển thị đúng rồi.
+        contentArea.innerHTML = '<div class="text-gray-400 p-4">Đang tải dữ liệu thống kê...</div>';
+
+        try {
+            const res = await fetchApi(`/stats?userId=${userId}`);
+            if (res.status === 'Success') {
+                const data = res.data.data;
+                contentArea.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-rose-500 flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase font-bold">Total Movies</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.totalMovies}</h3>
+                        </div>
+                        <div class="p-3 bg-rose-500 bg-opacity-20 rounded-full">
+                            <i class="fa-solid fa-film text-2xl text-rose-500"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-purple-500 flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase font-bold">Total Views</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.totalViews.toLocaleString()}</h3>
+                        </div>
+                        <div class="p-3 bg-purple-500 bg-opacity-20 rounded-full">
+                            <i class="fa-solid fa-eye text-2xl text-purple-500"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-blue-500 flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase font-bold">Total Users</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.totalUsers}</h3>
+                        </div>
+                        <div class="p-3 bg-blue-500 bg-opacity-20 rounded-full">
+                            <i class="fa-solid fa-users text-2xl text-blue-500"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border-l-4 border-yellow-500 flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase font-bold">Comments</p>
+                            <h3 class="text-3xl font-bold text-white mt-1">${data.totalComments}</h3>
+                        </div>
+                        <div class="p-3 bg-yellow-500 bg-opacity-20 rounded-full">
+                            <i class="fa-solid fa-comments text-2xl text-yellow-500"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-8 text-center border border-gray-700">
+                    <h2 class="text-2xl font-bold text-white mb-2">Chào mừng trở lại, Admin! 👋</h2>
+                    <p class="text-gray-400">Hệ thống đang hoạt động ổn định. Hãy chọn một mục bên trái để quản lý.</p>
+                </div>
+            `;
+            } else {
+                contentArea.innerHTML = `<div class="text-red-400 p-4">Lỗi tải thống kê: ${res.message}</div>`;
+            }
+        } catch (err) {
+            contentArea.innerHTML = `<div class="text-red-400 p-4">Lỗi kết nối: ${err.message}</div>`;
+        }
+    }
+
+    // Expose function
+    window.loadHotMovies = loadHotMovies;
+</script>
+</body>
+
+</html>

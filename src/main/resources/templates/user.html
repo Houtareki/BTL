@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tài khoản - PTIT CINEMA</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/user.css">
+</head>
+
+<body>
+<header>
+    <h1 id="logo" onclick="goHome()">PTIT CINEMA</h1>
+    <nav>
+        <a href="#" onclick="goHome()"><i class="fa-solid fa-house"></i> Trang chủ</a>
+        <a href="#" class="active"><i class="fa-solid fa-user"></i> Tài khoản</a>
+    </nav>
+</header>
+
+<div class="container">
+    <!-- User Info Section -->
+    <div class="section user-info-section">
+        <h2><i class="fa-solid fa-user-circle"></i> Thông tin tài khoản</h2>
+        <div class="user-card">
+            <div class="user-avatar">
+                <i class="fa-solid fa-user"></i>
+            </div>
+            <div class="user-details">
+                <div class="info-row">
+                    <span class="label">Tên đăng nhập:</span>
+                    <span class="value" id="username">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Email:</span>
+                    <span class="value" id="email">Loading...</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Trạng thái:</span>
+                    <span class="value status" id="status">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Change Password Section -->
+    <div class="section change-password-section">
+        <h2><i class="fa-solid fa-key"></i> Đổi mật khẩu</h2>
+        <form id="changePasswordForm" class="password-form">
+            <div class="form-group">
+                <label for="currentPassword">Mật khẩu hiện tại</label>
+                <input type="password" id="currentPassword" placeholder="Nhập mật khẩu hiện tại" required>
+            </div>
+            <div class="form-group">
+                <label for="newPassword">Mật khẩu mới</label>
+                <input type="password" id="newPassword" placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)" required>
+            </div>
+            <div class="form-group">
+                <label for="confirmPassword">Xác nhận mật khẩu mới</label>
+                <input type="password" id="confirmPassword" placeholder="Nhập lại mật khẩu mới" required>
+            </div>
+            <div id="password-message" class="message"></div>
+            <button type="submit" class="btn-submit">
+                <i class="fa-solid fa-check"></i> Đổi mật khẩu
+            </button>
+        </form>
+    </div>
+
+    <!-- Watchlist Section -->
+    <div class="section watchlist-section">
+        <h2><i class="fa-solid fa-heart"></i> Danh sách yêu thích</h2>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="showTab('liked')">
+                <i class="fa-solid fa-thumbs-up"></i> Đã thích
+            </button>
+            <button class="tab-btn" onclick="showTab('saved')">
+                <i class="fa-solid fa-bookmark"></i> Đã lưu
+            </button>
+            <button class="tab-btn" onclick="showTab('watched')">
+                <i class="fa-solid fa-eye"></i> Đã xem
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="liked" class="tab-content active">
+            <div class="movies-grid" id="liked-movies"></div>
+        </div>
+
+        <div id="saved" class="tab-content">
+            <div class="movies-grid" id="saved-movies"></div>
+        </div>
+
+        <div id="watched" class="tab-content">
+            <div class="movies-grid" id="watched-movies"></div>
+        </div>
+    </div>
+
+    <!-- Logout section -->
+    <div class="section logout-section">
+        <h2><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</h2>
+        <div class="logout-container">
+            <p class="logout-description">
+                <i class="fa-solid fa-info-circle"></i>
+                Đăng xuất khỏi tài khoản hiện tại.
+            </p>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Movie Detail Modal -->
+<div id="movie-detail">
+    <span class="close-btn" onclick="closeMovieDetail()">×</span>
+    <div class="detail-top">
+        <img id="detail-img" src="" alt="">
+        <div class="info">
+            <h2 id="detail-title"></h2>
+            <p id="detail-desc"></p>
+            <p><strong>Năm phát hành:</strong> <span id="detail-year"></span></p>
+            <p><strong>Quốc gia:</strong> <span id="detail-country"></span></p>
+            <p><strong>Ngôn ngữ:</strong> <span id="detail-language"></span></p>
+            <p><strong>Trạng thái:</strong> <span id="detail-status"></span></p>
+            <a id="detail-trailer" href="#" target="_blank"><i class="fa-solid fa-video"></i> Xem Trailer</a>
+            <div class="interaction">
+                <button id="like-btn" class="like-btn">
+                    <i class="fa-solid fa-thumbs-up"></i> Like (0)
+                </button>
+                <button id="save-btn" class="save-btn">
+                    <i class="fa-solid fa-bookmark"></i> Save (0)
+                </button>
+                <button id="view-btn" class="view-btn" disabled>
+                    <i class="fa-solid fa-eye"></i> View (0)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Episodes -->
+    <div class="episodes">
+        <h3><i class="fa-solid fa-clapperboard"></i> Các tập phim</h3>
+        <div id="episode-list" class="episodes-grid"></div>
+    </div>
+
+    <!-- Comments -->
+    <div class="comments">
+        <h3><i class="fa-solid fa-comments"></i> Comment</h3>
+        <div id="comment-list"></div>
+        <div class="comment-form">
+            <textarea id="comment-input" placeholder="Viết bình luận..."></textarea>
+            <button onclick="submitComment()"><i class="fa-solid fa-paper-plane"></i> Gửi bình luận</button>
+        </div>
+    </div>
+</div>
+
+<script src="../js/user.js"></script>
+</body>
+
+</html>

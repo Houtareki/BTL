@@ -1,0 +1,660 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: #141414;
+    color: #fff;
+    min-height: 100vh;
+}
+
+/* Header */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 50px;
+    background: rgba(20, 20, 20, 0.95);
+    position: fixed;
+    width: 100%;
+    top: 0;
+    z-index: 20;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+header h1 {
+    color: #e50914;
+    font-size: 28px;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+header h1:hover {
+    transform: scale(1.05);
+}
+
+nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+nav a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 8px 15px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+nav a:hover,
+nav a.active {
+    background: #e50914;
+    color: #fff;
+}
+
+/* Container */
+.container {
+    max-width: 1200px;
+    margin: 100px auto 40px;
+    padding: 0 30px;
+}
+
+/* Section */
+.section {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.section h2 {
+    font-size: 28px;
+    margin-bottom: 25px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 2px solid #e50914;
+    padding-bottom: 10px;
+}
+
+.section h2 i {
+    color: #e50914;
+}
+
+/* User Info Section */
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    padding: 20px;
+    background: #222;
+    border-radius: 10px;
+}
+
+.user-avatar {
+    width: 100px;
+    height: 100px;
+    background: linear-gradient(135deg, #e50914, #f40612);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.user-details {
+    flex: 1;
+}
+
+.info-row {
+    display: flex;
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+.info-row .label {
+    width: 160px;
+    color: #aaa;
+    font-weight: bold;
+}
+
+.info-row .value {
+    color: #fff;
+    flex: 1;
+}
+
+.info-row .status {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+/* Change Password Section */
+.password-form {
+    max-width: 500px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #aaa;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #222;
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #e50914;
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
+}
+
+.message {
+    font-size: 14px;
+    margin-bottom: 15px;
+    padding: 10px;
+    border-radius: 6px;
+    display: none;
+}
+
+.message.success {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+    border: 1px solid #4caf50;
+    display: block;
+}
+
+.message.error {
+    background: rgba(229, 9, 20, 0.2);
+    color: #e50914;
+    border: 1px solid #e50914;
+    display: block;
+}
+
+.btn-submit {
+    padding: 12px 30px;
+    background: #e50914;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-submit:hover {
+    background: #f40612;
+    transform: scale(1.05);
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 25px;
+    border-bottom: 2px solid #333;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    color: #aaa;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tab-btn:hover {
+    color: #fff;
+    background: rgba(229, 9, 20, 0.1);
+}
+
+.tab-btn.active {
+    color: #fff;
+    border-bottom-color: #e50914;
+}
+
+/* Tab Content */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Movies Grid */
+.movies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+}
+
+.movie-card {
+    position: relative;
+    width: 100%;
+    height: 270px;
+    cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.movie-card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 25px rgba(229, 9, 20, 0.5);
+}
+
+.movie-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.movie-card .overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    color: #fff;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.movie-card:hover .overlay {
+    opacity: 1;
+}
+
+.movie-card .overlay h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.movie-card .overlay p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.empty-state i {
+    font-size: 80px;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.empty-state h3 {
+    font-size: 24px;
+    margin-bottom: 10px;
+    color: #aaa;
+}
+
+.empty-state p {
+    font-size: 16px;
+    color: #666;
+}
+
+/* Movie Detail Modal */
+#movie-detail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.97);
+    overflow-y: auto;
+    padding: 40px 60px;
+    display: none;
+    z-index: 50;
+}
+
+#movie-detail .close-btn {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 32px;
+    font-weight: bold;
+    color: #fff;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+#movie-detail .close-btn:hover {
+    color: #e50914;
+}
+
+#movie-detail .detail-top {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+#movie-detail img {
+    width: 300px;
+    border-radius: 8px;
+}
+
+#movie-detail .info {
+    max-width: 600px;
+}
+
+#movie-detail h2 {
+    font-size: 38px;
+    margin-bottom: 15px;
+}
+
+#movie-detail p {
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+#movie-detail a {
+    font-weight: bold;
+    text-decoration: none;
+    margin-bottom: 10px;
+    display: inline-block;
+    color: #e50914;
+}
+
+/* Interaction buttons */
+.interaction {
+    display: flex;
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.interaction button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.like-btn {
+    background: #e50914;
+    color: #fff;
+}
+
+.like-btn:hover {
+    background: #f40612;
+    transform: scale(1.08);
+}
+
+.save-btn {
+    background: #007bff;
+    color: #fff;
+}
+
+.save-btn:hover {
+    background: #1a90ff;
+    transform: scale(1.08);
+}
+
+.view-btn {
+    background: #444;
+    color: #fff;
+    cursor: default;
+}
+
+/* Episodes */
+.episodes {
+    margin-top: 50px;
+}
+
+.episodes h3 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #e50914;
+    padding-bottom: 5px;
+}
+
+.episodes-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #1a1a1a;
+    border-radius: 6px;
+    scrollbar-width: none;
+}
+
+.episodes-grid::-webkit-scrollbar {
+    display: none;
+}
+
+.episode-card {
+    flex: 0 0 120px;
+    background: #222;
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.episode-card a {
+    color: red;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+}
+
+.episode-card:hover {
+    background: #e50914;
+    transform: scale(1.05);
+}
+
+.episode-card:hover a {
+    color: #fff;
+}
+
+/* Comments */
+.comments {
+    margin-top: 50px;
+}
+
+.comments h3 {
+    font-size: 24px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #e50914;
+    padding-bottom: 5px;
+}
+
+#comment-list {
+    margin-top: 20px;
+}
+
+.comment-item {
+    background: #1c1c1c;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    transition: transform 0.2s ease;
+}
+
+.comment-item:hover {
+    transform: translateY(-2px);
+    background: #252525;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    color: #bbb;
+}
+
+.comment-user {
+    font-weight: bold;
+    color: #e50914;
+}
+
+.comment-time {
+    font-style: italic;
+}
+
+.comment-content {
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
+.comment-form {
+    margin-top: 15px;
+}
+
+.comment-form textarea {
+    width: 100%;
+    height: 80px;
+    border-radius: 6px;
+    padding: 10px;
+    resize: none;
+    margin-bottom: 5px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #333;
+}
+
+.comment-form button {
+    padding: 10px 18px;
+    background: #e50914;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    border-radius: 6px;
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+.comment-form button:hover {
+    background: #f40612;
+    transform: scale(1.05);
+}
+
+/* Logout Section */
+.logout-section {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d0a0e 100%);
+    border: 1px solid #e50914;
+}
+
+.logout-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+}
+
+.logout-description {
+    text-align: center;
+    color: #ccc;
+    font-size: 15px;
+    max-width: 500px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+}
+
+.logout-description i {
+    color: #e50914;
+    font-size: 18px;
+}
+
+.btn-logout {
+    padding: 14px 40px;
+    background: linear-gradient(135deg, #e50914 0%, #b20710 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+}
+
+.btn-logout:hover {
+    background: linear-gradient(135deg, #f40612 0%, #e50914 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(229, 9, 20, 0.6);
+}
+
+.btn-logout:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 10px rgba(229, 9, 20, 0.4);
+}
+
+.btn-logout i {
+    font-size: 18px;
+}
